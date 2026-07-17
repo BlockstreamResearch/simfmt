@@ -1,0 +1,16 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+license = "MIT"
+edition = "2024"
+
+[workspace.lints.rust]
+rust_2018_idioms = "warn"
+unused_lifetimes = "warn"
+unreachable_pub = "warn"
+deprecated_in_future = "warn"
+
+[workspace.lints.clippy]
+multiple_crate_versions = "allow"
