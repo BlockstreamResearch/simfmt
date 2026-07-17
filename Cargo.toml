@@ -14,3 +14,11 @@ deprecated_in_future = "warn"
 
 [workspace.lints.clippy]
 multiple_crate_versions = "allow"
+
+[workspace.dependencies]
+simplicityhl = { path = "../../SimplicityHL", features = ["fmt"] }
+serde = { version = "1.0.228" }
+serde_json = { version = "1.0.150" }
+thiserror = { version = "2.0.18" }
+either = { version = "1.16.0" }
+
