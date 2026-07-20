@@ -23,3 +23,9 @@ getopt = { version = "1.1.9" }
 itertools = { version = "0.15.0" }
 globwalk = {  version = "0.9.1"  }
 similar = { version = "3.1.1" }
+
+simplicityhl = { workspace = true}
+serde = { workspace = true}
+serde_json = { workspace = true}
+thiserror = { workspace = true}
+either = { workspace = true}
