@@ -4,7 +4,6 @@ use anyhow::format_err;
 use getopts::{Matches, Options};
 use prettysimf::config::{Color, FmtConfig, PartialConfig};
 use prettysimf::fmt_processor::Session;
-use prettysimf::format_report_formatter::FormatReportFormatterBuilder;
 use prettysimf::utils::{EmitMode, Input, Verbosity};
 use std::collections::HashMap;
 use std::fs::File;
@@ -270,7 +269,7 @@ pub fn format_string(input: String, config: FmtConfig) -> anyhow::Result<i32> {
     let out = &mut io::stdout();
     let mut session = Session::new(config, Some(out));
 
-    format_and_emit_report(&mut session, Input::Text(input));
+    session.format_and_emit_report(Input::Text(input));
 
     let exit_code = if session.has_operational_errors()
         || session.has_parsing_errors()
@@ -310,7 +309,8 @@ fn format(files: Vec<PathBuf>, minimal_config_path: Option<String>, options: &Ge
             let (config, _) = load_config(input_path, explicit_config_path, Some(cli_config.clone()))?;
 
             let mut session = Session::new(config, Some(out));
-            format_and_emit_report(&mut session, Input::File(file));
+            session.format_and_emit_report(Input::File(file));
+
             minimal_config.merge_from(&session.config.used_options());
             has_operational_errors |= session.has_operational_errors();
             has_parsing_errors |= session.has_parsing_errors();
@@ -333,31 +333,6 @@ fn format(files: Vec<PathBuf>, minimal_config_path: Option<String>, options: &Ge
     Ok(exit_code)
 }
 
-fn format_and_emit_report<T: Write>(session: &mut Session<'_, T>, input: Input) {
-    match session.format(input) {
-        Ok(report) => {
-            if report.has_warnings() {
-                eprintln!(
-                    "{}",
-                    FormatReportFormatterBuilder::new(&report)
-                        .enable_colors(should_print_with_colors(session))
-                        .build()
-                );
-            }
-        }
-        Err(msg) => {
-            eprintln!("Error writing files: {msg}");
-            session.add_operational_error();
-        }
-    }
-}
-
-fn should_print_with_colors<T: Write>(session: &mut Session<'_, T>) -> bool {
-    term::stderr().is_some_and(|t| {
-        session.config.color().use_colored_tty() && t.supports_color() && t.supports_attr(term::Attr::Bold)
-    })
-}
-
 fn print_usage_to_stdout(opts: &Options, reason: &str) {
     let sep = if reason.is_empty() {
         String::new()
@@ -371,6 +346,7 @@ fn print_usage_to_stdout(opts: &Options, reason: &str) {
 fn print_version() {
     let version_number = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown");
     println!("simfmt {version_number}");
+    // todo: maybe add discoverability of out_dir?
 }
 
 fn determine_operation(matches: &Matches) -> anyhow::Result<Operation, OperationError> {

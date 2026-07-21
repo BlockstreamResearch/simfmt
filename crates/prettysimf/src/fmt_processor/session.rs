@@ -2,14 +2,14 @@ use crate::config::FmtConfig;
 use crate::emitter::Emitter;
 use crate::error::ErrorKind;
 use crate::fmt_processor::{FormatContext, FormatHandler, RawFormatContext, ReportedErrors, SourceFile};
-use crate::format_report_formatter::FormatReport;
+use crate::reporter::{FormatReport, FormatReportFormatterBuilder};
 use crate::source_file;
 use crate::utils::{FileName, Input, Timer, should_emit_verbose};
 use std::io;
 use std::io::Write;
 use std::sync::Arc;
 
-/// A session is a run of rustfmt across a single or multiple inputs.
+/// A session is a run of simfmt across a single or multiple inputs.
 pub struct Session<'b, T: Write> {
     pub config: FmtConfig,
     pub out: Option<&'b mut T>,
@@ -18,14 +18,14 @@ pub struct Session<'b, T: Write> {
     emitter: Box<dyn Emitter + 'b>,
 }
 
-fn format_project<T: FormatHandler>(
+pub(crate) fn format_project<T: FormatHandler>(
     input: Input,
     config: &FmtConfig,
     handler: &mut T,
 ) -> Result<FormatReport, ErrorKind> {
     let mut timer = Timer::start();
 
-    let mut report = FormatReport::new();
+    let report = FormatReport::new();
     let main_file = input.file_name();
     let input_is_stdin = main_file == FileName::Stdin;
     // TODO: decouple parsing stage somehow to make correct logs
@@ -158,6 +158,31 @@ impl<'b, T: Write + 'b> Session<'b, T> {
             || self.has_diff()
             || self.has_unformatted_code_errors()
             || self.errors.has_macro_format_failure)
+    }
+
+    pub fn format_and_emit_report(&mut self, input: Input) {
+        match self.format(input) {
+            Ok(report) => {
+                if report.has_warnings() {
+                    eprintln!(
+                        "{}",
+                        FormatReportFormatterBuilder::new(&report)
+                            .enable_colors(self.should_print_with_colors())
+                            .build()
+                    );
+                }
+            }
+            Err(msg) => {
+                eprintln!("Error writing files: {msg}");
+                self.add_operational_error();
+            }
+        }
+    }
+
+    pub fn should_print_with_colors(&self) -> bool {
+        term::stderr().is_some_and(|t| {
+            self.config.color().use_colored_tty() && t.supports_color() && t.supports_attr(term::Attr::Bold)
+        })
     }
 }
 

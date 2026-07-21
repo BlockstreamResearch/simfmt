@@ -8,16 +8,17 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-annotate-snippets = { version = "0.12.16"}
+annotate-snippets = { version = "0.12.16" }
 pretty = { version = "0.12.5" }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 itertools = { version = "0.15.0" }
-globwalk = {  version = "0.9.1"  }
+globwalk = { version = "0.9.1" }
 similar = { version = "3.1.1" }
 toml = { version = "0.9.8" }
 
-simplicityhl = { workspace = true}
-serde = { workspace = true}
-serde_json = { workspace = true}
-thiserror = { workspace = true}
-either = { workspace = true}
+simplicityhl = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+either = { workspace = true }
+term = { workspace = true }

@@ -1,6 +1,7 @@
 use crate::error::ErrorKind;
 use simplicityhl::error::{RichError, Span};
 
+#[derive(Debug)]
 pub(crate) struct FormattingError {
     pub(crate) line: usize,
     pub(crate) kind: ErrorKind,

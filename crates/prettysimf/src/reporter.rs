@@ -116,7 +116,7 @@ fn annotation(error: &FormattingError) -> Option<Annotation<'_>> {
     }
 }
 
-fn error_kind_to_snippet_annotation_level(error_kind: &ErrorKind) -> Level {
+fn error_kind_to_snippet_annotation_level(error_kind: &ErrorKind) -> Level<'_> {
     match error_kind {
         ErrorKind::LineOverflow(..)
         | ErrorKind::TrailingWhitespace
@@ -129,7 +129,7 @@ fn error_kind_to_snippet_annotation_level(error_kind: &ErrorKind) -> Level {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FormatReport {
     // Maps stringified file paths to their associated formatting errors.
     pub(crate) internal: Rc<RefCell<(FormatErrorMap, ReportedErrors)>>,

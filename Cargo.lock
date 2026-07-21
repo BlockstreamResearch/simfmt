@@ -646,6 +646,7 @@ dependencies = [
  "serde_json",
  "similar",
  "simplicityhl",
+ "term",
  "thiserror",
  "toml",
  "tracing-subscriber",

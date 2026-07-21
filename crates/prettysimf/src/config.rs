@@ -282,10 +282,8 @@ macro_rules! create_config {
             }
 
             pub fn is_hidden_option(name: &str) -> bool {
-                matches!(
-                    name,
-                    "verbose" | "emit_mode" | "color" | "print_misformatted_file_names"
-                )
+                const HIDE_OPTIONS: [&str; 4] = ["verbose" , "emit_mode", "color", "print_misformatted_file_names",];
+                HIDE_OPTIONS.contains(&name)
             }
 
             pub fn print_docs(out: &mut dyn Write) {

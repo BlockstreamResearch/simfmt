@@ -1,16 +1,11 @@
-use crate::emitter::{self, Emitter};
-use crate::utils::FileName;
 use std::fs;
 use std::io::{self, Write};
 use std::path::Path;
 use std::sync::Arc;
 
-// Append a newline to the end of each file.
-pub(crate) fn append_newline(s: &mut String) {
-    s.push('\n');
-}
-
 use crate::config::NewlineStyle;
+use crate::emitter::{self, Emitter};
+use crate::utils::FileName;
 
 pub(crate) fn write_file<T>(
     filename: &FileName,

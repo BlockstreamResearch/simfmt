@@ -1,8 +1,8 @@
 use crate::config::{FmtConfig, InnerFmtConfig};
 use crate::error::ErrorKind;
 use crate::fmt_processor::{FormatHandler, FormattingError};
-use crate::format_report_formatter::FormatReport;
 use crate::newline_style::apply_newline_style;
+use crate::reporter::FormatReport;
 use crate::utils::{FileName, Input};
 use simplicityhl::error::RichError;
 use simplicityhl::parse::{ParsedSource, Program};

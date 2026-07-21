@@ -2,7 +2,7 @@ use crate::error::ErrorKind;
 use crate::fmt_processor::FormattingError;
 use crate::utils::FileName;
 
-use crate::format_report_formatter::FormatReport;
+use crate::reporter::FormatReport;
 use std::collections::HashMap;
 use std::sync::Arc;
 // todo: add module resolution logic
