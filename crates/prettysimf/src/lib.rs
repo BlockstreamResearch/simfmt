@@ -1,14 +1,12 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+pub mod config;
+mod core;
+pub mod emitter;
+pub mod error;
+pub mod fmt_processor;
+pub mod format_report_formatter;
+pub mod newline_style;
+pub mod simplicity_fmt;
+pub mod source_file;
+pub mod utils;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use core::*;

@@ -16,9 +16,10 @@ deprecated_in_future = "warn"
 multiple_crate_versions = "allow"
 
 [workspace.dependencies]
-simplicityhl = { path = "../../SimplicityHL", features = ["fmt"] }
+simplicityhl = { path = "../SimplicityHL", features = ["fmt"] }
 serde = { version = "1.0.228" }
 serde_json = { version = "1.0.150" }
 thiserror = { version = "2.0.18" }
 either = { version = "1.16.0" }
+prettysimf = { path = "./crates/prettysimf" }
 
