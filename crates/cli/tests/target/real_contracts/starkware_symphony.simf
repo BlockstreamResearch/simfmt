@@ -1,14 +1,26 @@
+
+
+
+
+
+
+
+
+
+
 fn sha256(input: u256) -> u256 {
     let ctx: Ctx8 = jet::sha_256_ctx_8_init();
     let ctx: Ctx8 = jet::sha_256_ctx_8_add_32(ctx, input);
     jet::sha_256_ctx_8_finalize(ctx)
 }
 
+
 fn sha256_32(input: u32) -> u256 {
     let ctx: Ctx8 = jet::sha_256_ctx_8_init();
     let ctx: Ctx8 = jet::sha_256_ctx_8_add_4(ctx, input);
     jet::sha_256_ctx_8_finalize(ctx)
 }
+
 
 fn sha256_pair(left: u256, right: u256) -> u256 {
     let ctx: Ctx8 = jet::sha_256_ctx_8_init();
@@ -20,23 +32,23 @@ fn sha256_pair(left: u256, right: u256) -> u256 {
 fn test_sha256() {
     let input: u256 = 0x0000000000000000000000000000000000000000000000000000000000000000;
     let result: u256 = sha256(input);
-    assert!(
-        jet::eq_256(result, 0x66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925)
-    );
+    assert!(jet::eq_256(result, 0x66687aadf862bd776c8fc18b8e9f8e20089714856ee233b3902a591d0d5f2925));
 }
 
 fn test_sha256_32() {
     let input: u32 = 2915689030;
     let result: u256 = sha256_32(input);
-    assert!(
-        jet::eq_256(
-            result,
-            64711419806867828842001989061968035503454892533703351743109315571114974747662
-        )
-    );
+    assert!(jet::eq_256(result, 64711419806867828842001989061968035503454892533703351743109315571114974747662));
 }
 
+
 type ChannelState = u256;
+
+
+
+
+
+
 
 fn channel_mix_32(state: ChannelState, input: u32) -> ChannelState {
     let ctx: Ctx8 = jet::sha_256_ctx_8_init();
@@ -45,6 +57,12 @@ fn channel_mix_32(state: ChannelState, input: u32) -> ChannelState {
     jet::sha_256_ctx_8_finalize(ctx)
 }
 
+
+
+
+
+
+
 fn channel_mix_256(state: ChannelState, input: u256) -> ChannelState {
     let ctx: Ctx8 = jet::sha_256_ctx_8_init();
     let ctx: Ctx8 = jet::sha_256_ctx_8_add_32(ctx, state);
@@ -52,9 +70,12 @@ fn channel_mix_256(state: ChannelState, input: u256) -> ChannelState {
     jet::sha_256_ctx_8_finalize(ctx)
 }
 
+
 fn channel_mix(state: ChannelState) -> ChannelState {
     sha256(state)
 }
+
+
 
 fn split_256(value: u256) -> (u32, u32, u32, u32, u32, u32, u32, u32) {
     let (abcd, efgh): (u128, u128) = <u256>::into(value);
@@ -67,6 +88,13 @@ fn split_256(value: u256) -> (u32, u32, u32, u32, u32, u32, u32, u32) {
     (a, b, c, d, e, f, g, h)
 }
 
+
+
+
+
+
+
+
 fn reduce_limb_32_mod_32(limb: u32, r: u32, modulo: u32) -> u32 {
     let limb: u64 = <(u32, u32)>::into((0, limb));
     let r: u64 = <(u32, u32)>::into((0, r));
@@ -76,6 +104,12 @@ fn reduce_limb_32_mod_32(limb: u32, r: u32, modulo: u32) -> u32 {
     let (_, res): (u32, u32) = <u64>::into(r);
     res
 }
+
+
+
+
+
+
 
 fn reduce_256_mod_32(value: u256, modulo: u32) -> u32 {
     let (a, b, c, d, e, f, g, h): (u32, u32, u32, u32, u32, u32, u32, u32) = split_256(value);
@@ -90,6 +124,12 @@ fn reduce_256_mod_32(value: u256, modulo: u32) -> u32 {
     r
 }
 
+
+
+
+
+
+
 fn channel_draw_32(state: ChannelState, max: u32) -> (ChannelState, u32) {
     let value: u32 = reduce_256_mod_32(state, max);
     (channel_mix(state), value)
@@ -99,32 +139,35 @@ fn test_channel_draw_32() {
     let state: ChannelState = 53741377836084766287364085417998971256852254673610164556110591250061061441088;
     let (state, value): (ChannelState, u32) = channel_draw_32(state, 8193);
     assert!(jet::eq_32(value, 365));
-    assert!(
-        jet::eq_256(
-            state,
-            17257280192877315036328845329229606496919448857779645786470826404984163982688
-        )
-    );
+    assert!(jet::eq_256(state, 17257280192877315036328845329229606496919448857779645786470826404984163982688));
 }
 
+
 type MerkleNode = u256;
+
+
 
 type MerkleProof32 = List<MerkleNode, 32>;
 
 type MerkleAcc = (u256, u32);
 
+
 fn merkle_compute_step(sib_node: MerkleNode, acc: MerkleAcc) -> MerkleAcc {
     let (curr_node, path): MerkleAcc = acc;
     let next_node: u256 = match jet::divides_32(2, path) {
-        false => {
-            sha256_pair(sib_node, curr_node)
-        },
-        true => {
-            sha256_pair(curr_node, sib_node)
-        }
+        false => sha256_pair(sib_node, curr_node),
+        true => sha256_pair(curr_node, sib_node),
     };
     (next_node, jet::divide_32(path, 2))
 }
+
+
+
+
+
+
+
+
 
 fn merkle_verify_32(leaf: u256, auth_path: u32, proof: MerkleProof32, root: u256) {
     let acc: MerkleAcc = (leaf, auth_path);
@@ -137,7 +180,7 @@ fn test_merkle() {
     let leaf: u256 = sha256(0);
     let proof: MerkleProof32 = list![
         0xa665a45920422f9d417e4867efdc4fb8a04a1f3fff1fa07e998e86f7f7a27ae3,
-        0x114bd151f8fb0c58642d2170da4ae7d7c57977260ac2cc8905306cab6b2acabc
+        0x114bd151f8fb0c58642d2170da4ae7d7c57977260ac2cc8905306cab6b2acabc,
     ];
     merkle_verify_32(leaf, 4, proof, root);
 }
@@ -161,6 +204,7 @@ fn test_decommitment() {
         68599396864515883651939550638527607595242626780681277342646949156789742939178,
         56974666195930694403713290580441264812544914556973432228768127355537336583012
     ];
+
     let (_, auth_path): (bool, u32) = jet::add_32(leaf_id, 8192);
     merkle_verify_32(leaf, auth_path, proof, root);
 }
@@ -168,77 +212,78 @@ fn add_mod(a: u32, b: u32) -> u32 {
     let lhs: u64 = <(u32, u32)>::into((0, a));
     let rhs: u64 = <(u32, u32)>::into((0, b));
     let (_, sum): (bool, u64) = jet::add_64(lhs, rhs);
-    let res64: u64 = jet::modulo_64(sum, 3221225473);
+    let res64: u64 = jet::modulo_64(sum,  3221225473 );
     let (_, res): (u32, u32) = <u64>::into(res64);
     res
 }
 
+
 fn sub_mod(a: u32, b: u32) -> u32 {
-    let (_, b_neg): (bool, u32) = jet::subtract_32(3221225473, b);
+    let (_, b_neg): (bool, u32) = jet::subtract_32( 3221225473 , b);
     add_mod(a, b_neg)
 }
 
+
 fn mul_mod(a: u32, b: u32) -> u32 {
     let mul: u64 = jet::multiply_32(a, b);
-    let res64: u64 = jet::modulo_64(mul, 3221225473);
+    let res64: u64 = jet::modulo_64(mul,  3221225473 );
     let (_, res): (u32, u32) = <u64>::into(res64);
     res
 }
 
+
+
 type ExtendedEuclideanAcc = (u32, u32, u32, u32);
 
-fn div_mod_step(
-    acc: ExtendedEuclideanAcc,
-    context: (),
-    counter: u16
-) -> Either<u32, ExtendedEuclideanAcc> {
+
+fn div_mod_step(acc: ExtendedEuclideanAcc, context: (), counter: u16) -> Either<u32, ExtendedEuclideanAcc> {
     let (t, r, new_t, new_r): ExtendedEuclideanAcc = acc;
     match jet::is_zero_32(new_r) {
+        true => {
+            assert!(jet::eq_32(r, 1));
+            Left(t)
+        }
         false => {
             let q: u32 = jet::divide_32(r, new_r);
             let (t, new_t): (u32, u32) = (new_t, sub_mod(t, mul_mod(q, new_t)));
             let (r, new_r): (u32, u32) = (new_r, sub_mod(r, mul_mod(q, new_r)));
             Right((t, r, new_t, new_r))
-        },
-        true => {
-            assert!(jet::eq_32(r, 1));
-            Left(t)
         }
     }
 }
 
+
 fn div_mod(a: u32, b: u32) -> u32 {
-    let res: Either<u32, ExtendedEuclideanAcc> = for_while::<div_mod_step>(
-        (0, 3221225473, 1, b),
-        ()
-    );
+    let res: Either<u32, ExtendedEuclideanAcc> = for_while::<div_mod_step>((0,  3221225473 , 1, b), ());
     let t: u32 = unwrap_left::<ExtendedEuclideanAcc>(res);
     mul_mod(a, t)
 }
 
+
+
+
+
+
+
 type ExpModAcc = (u32, u32, u32);
+
 
 fn exp_mod_step(acc: ExpModAcc, context: (), counter: u16) -> Either<u32, ExpModAcc> {
     let (res, base, exp): ExpModAcc = acc;
     match jet::is_zero_32(exp) {
+        true => Left(res),
         false => {
             let new_res: u32 = match jet::divides_32(2, exp) {
-                false => {
-                    mul_mod(res, base)
-                },
-                true => {
-                    res
-                }
+                true => res,
+                false => mul_mod(res, base),
             };
             let new_base: u32 = mul_mod(base, base);
             let new_exp: u32 = jet::divide_32(exp, 2);
             Right((new_res, new_base, new_exp))
-        },
-        true => {
-            Left(res)
         }
     }
 }
+
 
 fn exp_mod(a: u32, b: u32) -> u32 {
     let res: Either<u32, ExpModAcc> = for_while::<exp_mod_step>((1, a, b), ());
@@ -308,62 +353,75 @@ fn test_exp_mod_2() {
     assert!(jet::eq_32(c, 1033050121));
 }
 
+
+
+
+
+
 type FibSquareCoeffs = (u32, u32, u32);
+
 
 type Eval = (u32, MerkleProof32);
 
+
 type FibSquareEvals = (Eval, Eval, Eval);
 
+
 fn fibsquare_read_coefficients(state: ChannelState) -> (ChannelState, FibSquareCoeffs) {
-    let (state, alpha0): (ChannelState, u32) = channel_draw_32(state, 3221225473);
-    let (state, alpha1): (ChannelState, u32) = channel_draw_32(state, 3221225473);
-    let (state, alpha2): (ChannelState, u32) = channel_draw_32(state, 3221225473);
+    let (state, alpha0): (ChannelState, u32) = channel_draw_32(state,  3221225473 );
+    let (state, alpha1): (ChannelState, u32) = channel_draw_32(state,  3221225473 );
+    let (state, alpha2): (ChannelState, u32) = channel_draw_32(state,  3221225473 );
     (state, (alpha0, alpha1, alpha2))
 }
 
+
 fn read_eval_checked(state: ChannelState, eval: Eval, idx: u32, p_mt_root: u256) -> ChannelState {
     let (p_ev, p_proof): Eval = eval;
-    let (_, auth_path): (bool, u32) = jet::add_32(idx, 8192);
+    let (_, auth_path): (bool, u32) = jet::add_32(idx,  8192 );
     merkle_verify_32(sha256_32(p_ev), auth_path, p_proof, p_mt_root);
     channel_mix_32(state, p_ev)
 }
 
-fn fibsquare_read_evaluations_checked(
-    state: ChannelState,
-    evals: FibSquareEvals,
-    idx: u32,
-    p_mt_root: u256
-) -> ChannelState {
+
+
+fn fibsquare_read_evaluations_checked(state: ChannelState, evals: FibSquareEvals, idx: u32, p_mt_root: u256) -> ChannelState {
     let (f_x, f_gx, f_ggx): FibSquareEvals = evals;
     let state: ChannelState = read_eval_checked(state, f_x, idx, p_mt_root);
-    let (_, idx): (bool, u32) = jet::add_32(idx, 8);
+    let (_, idx): (bool, u32) = jet::add_32(idx,  8 );
     let state: ChannelState = read_eval_checked(state, f_gx, idx, p_mt_root);
-    let (_, idx): (bool, u32) = jet::add_32(idx, 8);
+    let (_, idx): (bool, u32) = jet::add_32(idx,  8 );
     let state: ChannelState = read_eval_checked(state, f_ggx, idx, p_mt_root);
     state
 }
 
+
 fn fibsquare_calc_x(idx: u32) -> u32 {
-    mul_mod(5, exp_mod(1734477367, idx))
+    mul_mod( 5 , exp_mod( 1734477367 , idx))
 }
 
+
 fn fibsquare_eval_p0(x: u32, f_x: u32) -> u32 {
+
     div_mod(sub_mod(f_x, 1), sub_mod(x, 1))
 }
 
+
 fn fibsquare_eval_p1(x: u32, f_x: u32) -> u32 {
+
     div_mod(sub_mod(f_x, 2338775057), sub_mod(x, 2450347685))
 }
 
+
 fn fibsquare_eval_p2(x: u32, f_x: u32, f_gx: u32, f_ggx: u32) -> u32 {
+
     let num0: u32 = sub_mod(f_ggx, add_mod(mul_mod(f_x, f_x), mul_mod(f_gx, f_gx)));
-    let num1: u32 = mul_mod(
-        mul_mod(sub_mod(x, 2342081930), sub_mod(x, 2450347685)),
-        sub_mod(x, 532203874)
-    );
+
+    let num1: u32 = mul_mod(mul_mod(sub_mod(x, 2342081930), sub_mod(x, 2450347685)), sub_mod(x, 532203874));
+
     let den: u32 = sub_mod(exp_mod(x, 1024), 1);
     div_mod(mul_mod(num0, num1), den)
 }
+
 
 fn fibsquare_eval_cp(x: u32, a0: u32, a1: u32, a2: u32, f_x: u32, f_gx: u32, f_ggx: u32) -> u32 {
     let p0: u32 = fibsquare_eval_p0(x, f_x);
@@ -371,6 +429,7 @@ fn fibsquare_eval_cp(x: u32, a0: u32, a1: u32, a2: u32, f_x: u32, f_gx: u32, f_g
     let p2: u32 = fibsquare_eval_p2(x, f_x, f_gx, f_ggx);
     add_mod(add_mod(mul_mod(p0, a0), mul_mod(p1, a1)), mul_mod(p2, a2))
 }
+
 
 fn fibsquare_compose(x: u32, coeffs: FibSquareCoeffs, evals: FibSquareEvals) -> u32 {
     let (a0, a1, a2): FibSquareCoeffs = coeffs;
@@ -394,8 +453,16 @@ fn test_fibsquare_eval_p0() {
 }
 
 fn test_fibsquare_eval_cp() {
-    let (a0, a1, a2): FibSquareCoeffs = (2843266690, 519917353, 1882164991);
-    let (f_x, f_gx, f_ggx): (u32, u32, u32) = (2915689030, 2938213560, 2430756332);
+    let (a0, a1, a2): FibSquareCoeffs = (
+        2843266690,
+        519917353,
+        1882164991
+    );
+    let (f_x, f_gx, f_ggx): (u32, u32, u32) = (
+        2915689030,
+        2938213560,
+        2430756332
+    );
     let x: u32 = 1944025132;
     let cp: u32 = fibsquare_eval_cp(x, a0, a1, a2, f_x, f_gx, f_ggx);
     assert!(jet::eq_32(cp, 587367660));
@@ -403,37 +470,53 @@ fn test_fibsquare_eval_cp() {
 
 fn test_fibsquare_read_coefficients() {
     let state: ChannelState = 30579157067350379179940449776878177171877254029206216849297077040602409619412;
-    let (state, (alpha0, alpha1, alpha2)): (
-    ChannelState,
-        FibSquareCoeffs
-    ) = fibsquare_read_coefficients(state);
+    let (state, (alpha0, alpha1, alpha2)): (ChannelState, FibSquareCoeffs) = fibsquare_read_coefficients(state);
     assert!(jet::eq_32(alpha0, 2843266690));
     assert!(jet::eq_32(alpha1, 519917353));
     assert!(jet::eq_32(alpha2, 1882164991));
 }
 
+
+
+
+
+
 type FriAcc = (u32, u32, u32, u32);
+
+
+
+
+
+
+
 
 type FriLayer = (u256, u32, u32, MerkleProof32, u32, MerkleProof32);
 
+
+
 type FriLastLayer = u32;
+
 
 fn fri_read_commitment(layer: FriLayer, state: ChannelState) -> ChannelState {
     let (cp_mt_root, beta, _, _, _, _): FriLayer = layer;
+
     let state: ChannelState = channel_mix_256(state, cp_mt_root);
-    let (state, random): (ChannelState, u32) = channel_draw_32(state, 3221225473);
+
+    let (state, random): (ChannelState, u32) = channel_draw_32(state,  3221225473 );
     assert!(jet::eq_32(random, beta));
     state
 }
 
-fn fri_read_commitments_32(
-    layers: List<FriLayer, 32>,
-    last_layer: FriLastLayer,
-    state: ChannelState
-) -> ChannelState {
+
+
+
+fn fri_read_commitments_32(layers: List<FriLayer, 32>, last_layer: FriLastLayer, state: ChannelState) -> ChannelState {
     let state: ChannelState = fold::<fri_read_commitment, 32>(layers, state);
+
     channel_mix_32(state, last_layer)
 }
+
+
 
 fn fri_eval_cp_next(cpa_ev: u32, cpb_ev: u32, x: u32, beta: u32) -> u32 {
     let op0: u32 = div_mod(add_mod(cpa_ev, cpb_ev), 2);
@@ -441,12 +524,15 @@ fn fri_eval_cp_next(cpa_ev: u32, cpb_ev: u32, x: u32, beta: u32) -> u32 {
     add_mod(op0, mul_mod(op1, beta))
 }
 
+
+
 fn compute_auth_path(idx: u32, domain_size: u32) -> (u32, u32) {
     let (_, cpa_path): (bool, u32) = jet::add_32(jet::modulo_32(idx, domain_size), domain_size);
     let (_, cpb_idx): (bool, u32) = jet::add_32(idx, jet::divide_32(domain_size, 2));
     let (_, cpb_path): (bool, u32) = jet::add_32(jet::modulo_32(cpb_idx, domain_size), domain_size);
     (cpa_path, cpb_path)
 }
+
 
 fn fri_verify_layer(layer: FriLayer, acc: FriAcc) -> FriAcc {
     let (cp_mt_root, beta, cpa_ev, cpa_proof, cpb_ev, cpb_proof): FriLayer = layer;
@@ -460,14 +546,9 @@ fn fri_verify_layer(layer: FriLayer, acc: FriAcc) -> FriAcc {
     (idx, mul_mod(x, x), cp_ev_next, domain_size_next)
 }
 
-fn fri_verify_32(
-    fri_layers: List<FriLayer, 32>,
-    last_layer: FriLastLayer,
-    idx: u32,
-    x0: u32,
-    cp_ev: u32
-) {
-    let acc: FriAcc = (idx, x0, cp_ev, 8192);
+
+fn fri_verify_32(fri_layers: List<FriLayer, 32>, last_layer: FriLastLayer, idx: u32, x0: u32, cp_ev: u32) {
+    let acc: FriAcc = (idx, x0, cp_ev,  8192 );
     let (_, _, cp_last, _): FriAcc = fold::<fri_verify_layer, 32>(fri_layers, acc);
     assert!(jet::eq_32(cp_last, last_layer));
 }
@@ -481,12 +562,15 @@ fn test_compute_auth_path() {
     let (cpa_path, cpb_path): (u32, u32) = compute_auth_path(365, 8192);
     assert!(jet::eq_32(cpa_path, 8557));
     assert!(jet::eq_32(cpb_path, 12653));
+
     let (cpa_path, cpb_path): (u32, u32) = compute_auth_path(365, 4096);
     assert!(jet::eq_32(cpa_path, 4461));
     assert!(jet::eq_32(cpb_path, 6509));
+
     let (cpa_path, cpb_path): (u32, u32) = compute_auth_path(365, 32);
     assert!(jet::eq_32(cpa_path, 45));
     assert!(jet::eq_32(cpb_path, 61));
+
     let (cpa_path, cpb_path): (u32, u32) = compute_auth_path(365, 16);
     assert!(jet::eq_32(cpa_path, 29));
     assert!(jet::eq_32(cpb_path, 21));
@@ -576,27 +660,38 @@ fn test_fri_read_commitment() {
     );
     let state: ChannelState = 99851215514568128236024293828100700814284163779256277393690543685192875190069;
     let state: ChannelState = fri_read_commitment(layer, state);
-    assert!(
-        jet::eq_256(
-            state,
-            93000571263369675681024970016113523446711132661906490448098394253670222537274
-        )
-    );
+    assert!(jet::eq_256(state, 93000571263369675681024970016113523446711132661906490448098394253670222537274));
 }
+
+
+
+
+
 
 type FibSquareProof = (u256, FibSquareEvals, List<FriLayer, 32>, FriLastLayer);
 
-type Eval = (u32, MerkleProof32);
+
+type Eval = (u32, MerkleProof32)
+
+
 
 fn verify_proof(proof: FibSquareProof) {
     let (p_mt_root, evals, fri_layers, last_layer): FibSquareProof = proof;
+
     let state: ChannelState = sha256(p_mt_root);
+
     let (state, coeffs): (ChannelState, FibSquareCoeffs) = fibsquare_read_coefficients(state);
+
     let state: ChannelState = fri_read_commitments_32(fri_layers, last_layer, state);
-    let (state, idx): (ChannelState, u32) = channel_draw_32(state, 8192);
+
+    let (state, idx): (ChannelState, u32) = channel_draw_32(state,  8192 );
+
     let state: ChannelState = fibsquare_read_evaluations_checked(state, evals, idx, p_mt_root);
+
     let x: u32 = fibsquare_calc_x(idx);
+
     let cp_ev: u32 = fibsquare_compose(x, coeffs, evals);
+
     fri_verify_32(fri_layers, last_layer, idx, x, cp_ev);
 }
 
@@ -620,7 +715,7 @@ fn test_verifier() {
                     31559769642264477476609947789038892249602341113974031028210998883128473984759,
                     59506023094292276557631524570503011981542785608587973088039221793896784114979,
                     84551821149389691654110203871134974088990053182576151018715531676419185584733
-                ]
+                ],
             ),
             (
                 1953409283,
@@ -638,7 +733,7 @@ fn test_verifier() {
                     31559769642264477476609947789038892249602341113974031028210998883128473984759,
                     59506023094292276557631524570503011981542785608587973088039221793896784114979,
                     84551821149389691654110203871134974088990053182576151018715531676419185584733
-                ]
+                ],
             ),
             (
                 1898341013,
@@ -656,10 +751,11 @@ fn test_verifier() {
                     31559769642264477476609947789038892249602341113974031028210998883128473984759,
                     59506023094292276557631524570503011981542785608587973088039221793896784114979,
                     84551821149389691654110203871134974088990053182576151018715531676419185584733
-                ]
-            )
+                ],
+            ),
         ),
         list![
+
             (
                 111946434827258922207533214337541842175192226593200877216295834618633792652802,
                 593409582,
@@ -696,6 +792,7 @@ fn test_verifier() {
                     73532842762720789267106903508676014702951899518336472895610872065937466577305
                 ]
             ),
+
             (
                 14609411070256597378387532347992493223023351766135098876668934012071487472382,
                 1838972885,
@@ -730,6 +827,7 @@ fn test_verifier() {
                     102146779539805947974236504967555713059736195542450178174944570957989705723401
                 ]
             ),
+
             (
                 16187237833258614573159264045276350661232941951731651418567972740608421874183,
                 720845053,
@@ -762,6 +860,7 @@ fn test_verifier() {
                     12764200682137467477510613160967531054197068385553155047372517506302699406566
                 ]
             ),
+
             (
                 73544147395337689004430467629315209559681614627067346301810556415192743581500,
                 1755652062,
@@ -792,6 +891,7 @@ fn test_verifier() {
                     89425822023787115004997529614203966725509035503824782859167290849363318923711
                 ]
             ),
+
             (
                 15724229312219948954954512583504467882983404941165832610262898233590117033594,
                 1994040583,
@@ -820,6 +920,7 @@ fn test_verifier() {
                     83677109099360921584226154686720249543501031701562006319680595592535157104619
                 ]
             ),
+
             (
                 17738437910730036923927185422057906728211125170085170242151265136234594255630,
                 1151636718,
@@ -846,6 +947,7 @@ fn test_verifier() {
                     82302166834912850032824134185356574441529042942116214962854850446485106909922
                 ]
             ),
+
             (
                 45414240831122634981114974407216132319985725114217189998139454326440586470300,
                 2350631655,
@@ -870,6 +972,7 @@ fn test_verifier() {
                     22760051107696355366671880377357370286747171747223149559195553311120968888666
                 ]
             ),
+
             (
                 86593030678223703421651047821545416377485176882670647333545017246111918712745,
                 2438179415,
@@ -892,6 +995,7 @@ fn test_verifier() {
                     76165052397842229918188138898358370362921459811096809526792798516395294113945
                 ]
             ),
+
             (
                 81486635216770259806928363191566725559166199191715651782449064474797352482260,
                 259430084,
@@ -912,6 +1016,7 @@ fn test_verifier() {
                     3531409345126854725106386585806242960815835671510496940623029353855446561638
                 ]
             ),
+
             (
                 2602135856068406767876326370940493454803525596065452959785412916693689963469,
                 2273092189,
@@ -935,6 +1040,11 @@ fn test_verifier() {
     );
     verify_proof(proof);
 }
+
+
+
+
+
 
 fn pad_60kb() {
     assert!(jet::eq_256(1, 1));

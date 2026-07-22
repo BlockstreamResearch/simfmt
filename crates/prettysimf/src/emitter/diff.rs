@@ -2,6 +2,8 @@ use super::*;
 use crate::utils::{OutputWriter, Verbosity};
 use similar::{ChangeTag, DiffTag, TextDiff};
 
+const MISSING_NEWLINE_HINT: &str = r#"\ <No final newline>"#;
+
 pub(crate) struct DiffEmitter {
     config: EmitterConfig,
 }
@@ -24,11 +26,6 @@ impl Emitter for DiffEmitter {
     ) -> Result<EmitterResult, io::Error> {
         let mismatch = make_diff(original_text, formatted_text);
         let has_diff = mismatch.ops().iter().any(|op| op.tag() != DiffTag::Equal);
-
-        if mismatch.newline_terminated() && has_diff {
-            writeln!(output, "Incorrect newline style in {filename}")?;
-            return Ok(EmitterResult { has_diff: true });
-        }
 
         if has_diff {
             if self.config.print_misformatted_file_names {
@@ -57,21 +54,31 @@ fn print_diff<F>(diff: TextDiff<str>, get_section_title: F, config: &EmitterConf
 where
     F: Fn(Option<usize>) -> String,
 {
-    let line_terminator = if config.verbose == Verbosity::Verbose {
-        "⏎"
-    } else {
-        ""
-    };
+    let is_verbose = matches!(config.verbose, Verbosity::Verbose);
+
     let mut writer = OutputWriter::new(config.color);
     writer.writeln(&get_section_title(None), None);
 
     for mismatch in diff.iter_all_changes() {
-        let line = dbg!(mismatch).value();
-        match mismatch.tag() {
-            ChangeTag::Equal => writer.write(&format!(" {line}{line_terminator}"), None),
-            ChangeTag::Delete => writer.write(&format!("-{line}{line_terminator}"), Some(term::color::RED)),
-            ChangeTag::Insert => writer.write(&format!("+{line}{line_terminator}"), Some(term::color::GREEN)),
+        let (prefix, color) = match mismatch.tag() {
+            ChangeTag::Equal => (" ", None),
+            ChangeTag::Delete => ("-", Some(term::color::RED)),
+            ChangeTag::Insert => ("+", Some(term::color::GREEN)),
+        };
+        let line = strip_line_terminator(mismatch.value());
+        let terminator = if is_verbose && !mismatch.missing_newline() {
+            "⏎"
+        } else {
+            ""
+        };
+
+        writer.write(&format!("{prefix}{line}{terminator}"), color);
+
+        if diff.newline_terminated() && mismatch.missing_newline() {
+            writer.write(MISSING_NEWLINE_HINT, None);
         }
+
+        writer.writeln("", None);
     }
 }
 
@@ -174,11 +181,11 @@ mod tests {
     }
 
     #[test]
-    fn prints_newline_message_with_only_newline_style_diff() {
+    fn detects_newline_style_diff() {
         let mut writer = Vec::new();
         let config = EmitterConfig::default();
         let mut emitter = DiffEmitter::new(config);
-        let _ = emitter
+        let result = emitter
             .emit_formatted_file(
                 &mut writer,
                 FormattedFile {
@@ -188,9 +195,16 @@ mod tests {
                 },
             )
             .unwrap();
-        assert_eq!(
-            String::from_utf8(writer).unwrap(),
-            String::from("Incorrect newline style in src/lib.rs\n")
-        );
+        assert!(result.has_diff);
+        assert!(writer.is_empty());
+    }
+
+    #[test]
+    fn identifies_a_missing_final_newline() {
+        let diff = TextDiff::from_lines("last line", "replacement\n");
+
+        assert!(diff.newline_terminated());
+        assert!(diff.iter_all_changes().any(|change| change.missing_newline()));
+        assert_eq!(MISSING_NEWLINE_HINT, r#"\ <No final newline>"#);
     }
 }

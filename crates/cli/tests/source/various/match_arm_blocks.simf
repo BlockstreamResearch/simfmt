@@ -5,5 +5,5 @@ fn main() {
             Right(value: u8) => value,
         },
         Right(value: u8) => value,
-    }
+    };
 }

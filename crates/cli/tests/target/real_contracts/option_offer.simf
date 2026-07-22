@@ -81,16 +81,18 @@ fn ensure_correct_change_at_index(
 ) {
     let (asset_bits, available_asset_amount): (u256, u64) = get_input_explicit_asset_amount(index);
     assert!(jet::eq_256(unwrap(jet::input_script_hash(index)), contract_script_hash));
+
     match is_change_needed {
         false => {
             assert!(jet::eq_64(asset_amount_to_spend, available_asset_amount))
         },
         true => {
             ensure_input_and_output_script_hash_eq(index);
-            let (carry, asset_change): (bool, u64) = jet::subtract_64(
-                available_asset_amount,
-                asset_amount_to_spend
-            );
+
+            let (
+                carry,
+                asset_change
+            ): (bool, u64) = jet::subtract_64(available_asset_amount, asset_amount_to_spend);
             ensure_zero_bit(carry);
             ensure_output_asset_with_amount_eq(index, asset_id, asset_change);
         }
@@ -176,9 +178,12 @@ fn withdraw_path(
     sig: Signature
 ) {
     assert!(jet::eq_32(jet::current_index(), 0));
+
     let (input_asset, input_amount): (u256, u64) = get_input_explicit_asset_amount(0);
     assert!(jet::eq_256(input_asset, param::SETTLEMENT_ASSET_ID));
+
     check_user_signature(sig);
+
     ensure_output_asset_with_amount_eq(0, param::SETTLEMENT_ASSET_ID, input_amount);
 }
 
@@ -200,14 +205,21 @@ fn expiry_path(
     sig: Signature
 ) {
     jet::check_lock_time(param::EXPIRY_TIME);
+
     assert!(jet::le_32(jet::current_index(), 1));
+
     let expected_covenant_script_hash: u256 = get_input_script_hash(0);
+
     assert!(jet::eq_256(get_input_script_hash(1), expected_covenant_script_hash));
+
     let (collateral_asset, collateral_amount): (u256, u64) = get_input_explicit_asset_amount(0);
     assert!(jet::eq_256(collateral_asset, param::COLLATERAL_ASSET_ID));
+
     let (premium_asset, premium_amount): (u256, u64) = get_input_explicit_asset_amount(1);
     assert!(jet::eq_256(premium_asset, param::PREMIUM_ASSET_ID));
+
     check_user_signature(sig);
+
     ensure_output_asset_with_amount_eq(0, param::COLLATERAL_ASSET_ID, collateral_amount);
     ensure_output_asset_with_amount_eq(1, param::PREMIUM_ASSET_ID, premium_amount);
 }

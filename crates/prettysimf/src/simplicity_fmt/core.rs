@@ -1,13 +1,14 @@
 use crate::config::InnerFmtConfig;
 
 use simplicityhl::error::Span;
-use simplicityhl::lexer::{FmtToken, FmtTokens, TriviaKind};
+use simplicityhl::lexer::{FmtToken, FmtTokens, Token, TriviaKind};
 
 pub struct Context<'a> {
     pub config: &'a InnerFmtConfig,
     pub source: &'a str,
     pub prefix_end: usize,
     pub trivia: TriviaCursor,
+    semicolons: Vec<Span>,
 }
 
 impl<'a> Context<'a> {
@@ -17,7 +18,18 @@ impl<'a> Context<'a> {
             source,
             prefix_end,
             trivia: TriviaCursor::from_tokens(tokens),
+            semicolons: tokens
+                .iter()
+                .filter_map(|(token, span)| matches!(token, FmtToken::Token(Token::Semi)).then_some(*span))
+                .collect(),
         }
+    }
+
+    pub fn semicolon_end_between(&self, start: usize, end: usize) -> Option<usize> {
+        self.semicolons
+            .iter()
+            .find(|span| span.start >= start && span.end <= end)
+            .map(|span| span.end)
     }
 }
 

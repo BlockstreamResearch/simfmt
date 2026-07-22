@@ -57,10 +57,12 @@ fn constraint_percentage(
     provided_amount: u64
 ) {
     let MAX_BASIS_POINTS: u64 = 10000;
+
     let arg1: u256 = <(u128, u128)>::into(
         (0, jet::multiply_64(base_amount, basis_point_percentage))
     );
     let arg2: u256 = <(u128, u128)>::into((0, jet::multiply_64(provided_amount, MAX_BASIS_POINTS)));
+
     assert!(jet::eq_256(arg1, arg2));
 }
 
@@ -156,16 +158,18 @@ fn ensure_correct_change_at_index(
     let (asset_bits, available_asset_amount): (u256, u64) = get_input_explicit_asset_amount(index);
     assert!(jet::eq_256(unwrap(jet::input_script_hash(index)), contract_script_hash));
     assert!(jet::eq_32(jet::current_index(), index));
+
     match is_change_needed {
         false => {
             assert!(jet::eq_64(asset_amount_to_spend, available_asset_amount))
         },
         true => {
             ensure_input_and_output_script_hash_eq(index);
-            let (carry, collateral_change): (bool, u64) = jet::subtract_64(
-                available_asset_amount,
-                asset_amount_to_spend
-            );
+
+            let (
+                carry,
+                collateral_change
+            ): (bool, u64) = jet::subtract_64(available_asset_amount, asset_amount_to_spend);
             ensure_zero_bit(carry);
             ensure_output_asset_with_amount_eq(index, asset_id, collateral_change);
         }
@@ -436,20 +440,27 @@ fn ensure_correct_return_at(
     match jet::eq_64(fee_basis_points, 0) {
         false => {
             let fee_output_index: u32 = increment_by(user_output_index, 1);
-            let (user_asset_bits, user_amount): (u256, u64) = get_output_explicit_asset_amount(
-                user_output_index
-            );
+
+            let (
+                user_asset_bits,
+                user_amount
+            ): (u256, u64) = get_output_explicit_asset_amount(user_output_index);
             assert!(jet::eq_256(user_asset_bits, asset_id));
-            let (fee_asset_bits, fee_amount): (u256, u64) = get_output_explicit_asset_amount(
-                fee_output_index
-            );
-            assert!(jet::eq_256(fee_asset_bits, asset_id));
-            let (carry, calculated_total_amount): (bool, u64) = jet::add_64(
-                user_amount,
+
+            let (
+                fee_asset_bits,
                 fee_amount
-            );
+            ): (u256, u64) = get_output_explicit_asset_amount(fee_output_index);
+            assert!(jet::eq_256(fee_asset_bits, asset_id));
+
+            let (
+                carry,
+                calculated_total_amount
+            ): (bool, u64) = jet::add_64(user_amount, fee_amount);
             ensure_zero_bit(carry);
+
             constraint_percentage(calculated_total_amount, fee_basis_points, fee_amount);
+
             ensure_output_script_hash_eq(fee_output_index, param::FEE_SCRIPT_HASH);
         },
         true => {

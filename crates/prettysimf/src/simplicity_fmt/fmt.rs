@@ -206,6 +206,69 @@ fn {} first() {} {{
     }
 
     #[test]
+    fn wraps_long_tuple_and_array_patterns_with_their_bindings() {
+        let source = r#"
+fn main(protocol_fee_vault_indexes: (u32, u32), protocol_fee_vault_array_indexes: [u32; 2]) {
+    let (protocol_fee_vault_input_index, protocol_fee_vault_output_index): (u32, u32) = protocol_fee_vault_indexes;
+    let [protocol_fee_vault_input_index, protocol_fee_vault_output_index]: [u32; 2] = protocol_fee_vault_array_indexes;
+}
+"#;
+
+        let formatted = format(source);
+        assert!(formatted.contains(
+            "let (\n        protocol_fee_vault_input_index,\n        protocol_fee_vault_output_index\n    ): (u32, u32) = protocol_fee_vault_indexes;"
+        ));
+        assert!(formatted.contains(
+            "let [\n        protocol_fee_vault_input_index,\n        protocol_fee_vault_output_index\n    ]: [u32; 2] = protocol_fee_vault_array_indexes;"
+        ));
+        assert_eq!(format(&formatted), formatted);
+    }
+
+    #[test]
+    fn preserves_blank_lines_between_block_statements() {
+        let source = r#"
+fn main() {
+    let first: u32 = 1;
+    let second: u32 = 2;
+
+    let third: u32 = 3;
+}
+"#;
+
+        assert_eq!(format(source), source);
+    }
+
+    #[test]
+    fn indents_inline_match_arms_inside_commented_functions() {
+        let source = r#"
+fn main() {
+    // Keep this function source-aware.
+    match true {
+        false => false,
+        true => true,
+    }
+}
+"#;
+        let expected = r#"
+fn main() {
+    // Keep this function source-aware.
+    match true {
+        false => {
+            false
+        },
+        true => {
+            true
+        },
+    }
+}
+"#;
+
+        let formatted = format(source);
+        assert_eq!(formatted, expected);
+        assert_eq!(format(&formatted), formatted);
+    }
+
+    #[test]
     fn removes_whitespace_from_blank_lines() {
         assert_eq!(
             super::remove_whitespace_from_blank_lines("one\n \t\n\t \r\ntwo\n   "),

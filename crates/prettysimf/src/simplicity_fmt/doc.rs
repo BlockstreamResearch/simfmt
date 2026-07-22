@@ -71,16 +71,73 @@ struct SourceEdit {
     replacement: String,
 }
 
+#[derive(Clone, Copy)]
+struct LineIndent {
+    start: usize,
+    end: usize,
+}
+
+struct CustomEditContext<'src> {
+    source: &'src str,
+    line_indents: Vec<LineIndent>,
+    indent: String,
+}
+
+impl<'src> CustomEditContext<'src> {
+    fn new(source: &'src str, indent_width: usize) -> Self {
+        let mut line_indents = Vec::new();
+        let mut line_start = 0;
+
+        loop {
+            let line_end = source[line_start..]
+                .find('\n')
+                .map_or(source.len(), |offset| line_start + offset);
+            let indent_end = source[line_start..line_end]
+                .find(|character: char| !character.is_whitespace())
+                .map_or(line_end, |offset| line_start + offset);
+
+            line_indents.push(LineIndent {
+                start: line_start,
+                end: indent_end,
+            });
+
+            if line_end == source.len() {
+                break;
+            }
+            line_start = line_end + 1;
+        }
+
+        Self {
+            source,
+            line_indents,
+            indent: " ".repeat(indent_width),
+        }
+    }
+
+    fn indentation_at(&self, offset: usize) -> &'src str {
+        let index = match self.line_indents.binary_search_by_key(&offset, |line| line.start) {
+            Ok(index) => index,
+            Err(index) => index.saturating_sub(1),
+        };
+        let line = self.line_indents[index];
+        &self.source[line.start..line.end]
+    }
+
+    fn indent_from(&self, base: &str, inherited_depth: usize) -> String {
+        let mut indentation = String::with_capacity(base.len() + self.indent.len() * inherited_depth);
+        indentation.push_str(base);
+        for _ in 0..inherited_depth {
+            indentation.push_str(&self.indent);
+        }
+        indentation
+    }
+}
+
 fn format_commented_function(function: &Function, context: &Context<'_>) -> Option<String> {
     let span = function.span();
     let mut edits = Vec::new();
-    collect_custom_edits(
-        function.body(),
-        context.source,
-        context.config.indent_width.max(0) as usize,
-        0,
-        &mut edits,
-    );
+    let edit_context = CustomEditContext::new(context.source, context.config.indent_width.max(0) as usize);
+    collect_custom_edits(function.body(), &edit_context, 0, &mut edits);
 
     let mut source = context.source.get(span.start..span.end)?.to_owned();
     edits.sort_by(|left, right| right.start.cmp(&left.start).then_with(|| right.end.cmp(&left.end)));
@@ -96,9 +153,8 @@ fn format_commented_function(function: &Function, context: &Context<'_>) -> Opti
 
 fn collect_custom_edits(
     expression: &Expression,
-    source: &str,
-    indent_width: usize,
-    inherited_indent: usize,
+    context: &CustomEditContext<'_>,
+    inherited_indent_depth: usize,
     edits: &mut Vec<SourceEdit>,
 ) {
     match expression.inner() {
@@ -106,15 +162,15 @@ fn collect_custom_edits(
             for statement in statements.iter() {
                 match statement {
                     Statement::Assignment(assignment) => {
-                        collect_custom_edits(assignment.expression(), source, indent_width, inherited_indent, edits);
+                        collect_custom_edits(assignment.expression(), context, inherited_indent_depth, edits);
                     }
                     Statement::Expression(expression) => {
-                        collect_custom_edits(expression, source, indent_width, inherited_indent, edits);
+                        collect_custom_edits(expression, context, inherited_indent_depth, edits);
                     }
                 }
             }
             if let Some(expression) = trailing_expression {
-                collect_custom_edits(expression, source, indent_width, inherited_indent, edits);
+                collect_custom_edits(expression, context, inherited_indent_depth, edits);
             }
         }
         ExpressionInner::Single(single) => match single.inner() {
@@ -122,21 +178,21 @@ fn collect_custom_edits(
             | SingleExpressionInner::Either(Either::Right(expression))
             | SingleExpressionInner::Option(Some(expression))
             | SingleExpressionInner::Expression(expression) => {
-                collect_custom_edits(expression, source, indent_width, inherited_indent, edits);
+                collect_custom_edits(expression, context, inherited_indent_depth, edits);
             }
             SingleExpressionInner::Match(match_expression) => {
-                collect_match_edits(match_expression, source, indent_width, inherited_indent, edits);
+                collect_match_edits(match_expression, context, inherited_indent_depth, edits);
             }
             SingleExpressionInner::Tuple(expressions)
             | SingleExpressionInner::Array(expressions)
             | SingleExpressionInner::List(expressions) => {
                 for expression in expressions.iter() {
-                    collect_custom_edits(expression, source, indent_width, inherited_indent, edits);
+                    collect_custom_edits(expression, context, inherited_indent_depth, edits);
                 }
             }
             SingleExpressionInner::Call(call) => {
                 for expression in call.args() {
-                    collect_custom_edits(expression, source, indent_width, inherited_indent, edits);
+                    collect_custom_edits(expression, context, inherited_indent_depth, edits);
                 }
             }
             SingleExpressionInner::Option(None)
@@ -153,15 +209,17 @@ fn collect_custom_edits(
 
 fn collect_match_edits(
     match_expression: &Match,
-    source: &str,
-    indent_width: usize,
-    inherited_indent: usize,
+    context: &CustomEditContext<'_>,
+    inherited_indent_depth: usize,
     edits: &mut Vec<SourceEdit>,
 ) {
     for arm in [match_expression.left(), match_expression.right()] {
         let expression = arm.expression();
         let span = expression.span();
-        let is_block = source.get(span.start..).is_some_and(|source| source.starts_with('{'));
+        let is_block = context
+            .source
+            .get(span.start..)
+            .is_some_and(|source| source.starts_with('{'));
 
         if !is_block {
             if is_empty_tuple(expression) {
@@ -171,11 +229,10 @@ fn collect_match_edits(
                     replacement: "{}".to_owned(),
                 });
             } else {
-                // TODO: calculate efficiently ident
-                let arm_indent = indentation_at(source, span.start);
-                let effective_arm_indent = format!("{arm_indent}{}", " ".repeat(inherited_indent));
-                let body_indent = format!("{effective_arm_indent}{}", " ".repeat(indent_width));
-                indent_source_lines(source, span.start, span.end, indent_width, edits);
+                let arm_indent = context.indentation_at(span.start);
+                let effective_arm_indent = context.indent_from(arm_indent, inherited_indent_depth);
+                let body_indent = context.indent_from(&effective_arm_indent, 1);
+                indent_source_lines(context, span.start, span.end, edits);
                 edits.push(SourceEdit {
                     start: span.start,
                     end: span.start,
@@ -190,16 +247,16 @@ fn collect_match_edits(
         }
 
         let nested_indent = if !is_block && !is_empty_tuple(expression) {
-            inherited_indent.saturating_add(indent_width)
+            inherited_indent_depth.saturating_add(1)
         } else {
-            inherited_indent
+            inherited_indent_depth
         };
-        collect_custom_edits(expression, source, indent_width, nested_indent, edits);
+        collect_custom_edits(expression, context, nested_indent, edits);
     }
 }
 
-fn indent_source_lines(source: &str, start: usize, end: usize, indent_width: usize, edits: &mut Vec<SourceEdit>) {
-    let Some(expression) = source.get(start..end) else {
+fn indent_source_lines(context: &CustomEditContext<'_>, start: usize, end: usize, edits: &mut Vec<SourceEdit>) {
+    let Some(expression) = context.source.get(start..end) else {
         return;
     };
 
@@ -209,19 +266,10 @@ fn indent_source_lines(source: &str, start: usize, end: usize, indent_width: usi
             edits.push(SourceEdit {
                 start: line_start,
                 end: line_start,
-                replacement: " ".repeat(indent_width),
+                replacement: context.indent.clone(),
             });
         }
     }
-}
-
-fn indentation_at(source: &str, offset: usize) -> &str {
-    let line_start = source[..offset].rfind('\n').map_or(0, |index| index + 1);
-    let line = &source[line_start..offset];
-    let indent_width = line
-        .find(|character: char| !character.is_whitespace())
-        .unwrap_or(line.len());
-    &source[line_start..line_start + indent_width]
 }
 
 fn is_empty_tuple(expression: &Expression) -> bool {
@@ -244,10 +292,14 @@ fn gap_doc<'src>(context: &mut Context<'_>, start: usize, end: usize, between_it
 
     let newline_count = trivia.iter().filter(|trivia| trivia.is_newline()).count();
 
-    if start == end {
+    if between_items {
+        if newline_count >= 2 {
+            RcDoc::hardline().append(RcDoc::hardline())
+        } else {
+            RcDoc::hardline()
+        }
+    } else if start == end {
         RcDoc::nil()
-    } else if between_items && newline_count >= 2 {
-        RcDoc::hardline().append(RcDoc::hardline())
     } else {
         RcDoc::hardline()
     }
@@ -404,24 +456,30 @@ impl Doc for Expression {
         match self.inner() {
             ExpressionInner::Single(s) => s.to_doc(context),
             ExpressionInner::Block(stmts, expr) => {
-                let stmts_doc: Vec<_> = stmts.iter().filter_map(|s| s.to_doc(context)).collect();
-                let expr_doc = expr.as_ref().and_then(|e| e.to_doc(context));
-
                 let mut inner = RcDoc::nil();
-                let has_stmts = !stmts_doc.is_empty();
+                let mut previous_statement: Option<&Statement> = None;
 
-                if has_stmts {
-                    inner = inner.append(RcDoc::intersperse(stmts_doc, RcDoc::hardline()));
-                }
-
-                if let Some(e) = expr_doc {
-                    if has_stmts {
-                        inner = inner.append(RcDoc::hardline());
+                for statement in stmts.iter() {
+                    if let Some(previous) = previous_statement {
+                        let previous_end =
+                            context.semicolon_end_between(previous.span().end, statement.span().start)?;
+                        inner = inner.append(gap_doc(context, previous_end, statement.span().start, true));
                     }
-                    inner = inner.append(e);
+
+                    inner = inner.append(statement.to_doc(context)?);
+                    previous_statement = Some(statement);
                 }
 
-                if has_stmts || expr.is_some() {
+                if let Some(expression) = expr {
+                    if let Some(previous) = previous_statement {
+                        let previous_end =
+                            context.semicolon_end_between(previous.span().end, expression.span().start)?;
+                        inner = inner.append(gap_doc(context, previous_end, expression.span().start, true));
+                    }
+                    inner = inner.append(expression.to_doc(context)?);
+                }
+
+                if !stmts.is_empty() || expr.is_some() {
                     Some(
                         RcDoc::text("{")
                             .append(RcDoc::hardline())
@@ -456,7 +514,8 @@ impl Doc for Assignment {
                 .append(self.ty().to_doc(context)?)
                 .append(RcDoc::text(" = "))
                 .append(self.expression().to_doc(context)?)
-                .append(RcDoc::text(";")),
+                .append(RcDoc::text(";"))
+                .group(),
         )
     }
 }
@@ -556,18 +615,36 @@ impl Doc for Pattern {
             Pattern::Ignore => Some(RcDoc::text("_")),
             Pattern::Identifier(id) => Some(RcDoc::as_string(id)),
             Pattern::Tuple(patterns) => {
-                let docs: Vec<_> = patterns.iter().filter_map(|p| p.to_doc(context)).collect();
+                if patterns.is_empty() {
+                    return Some(RcDoc::text("()"));
+                }
+
+                let docs: Option<Vec<_>> = patterns.iter().map(|pattern| pattern.to_doc(context)).collect();
                 Some(
                     RcDoc::text("(")
-                        .append(RcDoc::intersperse(docs, RcDoc::text(", ")))
+                        .append(
+                            RcDoc::line_()
+                                .append(RcDoc::intersperse(docs?, RcDoc::text(",").append(RcDoc::line())))
+                                .nest(context.config.indent_width as isize),
+                        )
+                        .append(RcDoc::line_())
                         .append(RcDoc::text(")")),
                 )
             }
             Pattern::Array(patterns) => {
-                let docs: Vec<_> = patterns.iter().filter_map(|p| p.to_doc(context)).collect();
+                if patterns.is_empty() {
+                    return Some(RcDoc::text("[]"));
+                }
+
+                let docs: Option<Vec<_>> = patterns.iter().map(|pattern| pattern.to_doc(context)).collect();
                 Some(
                     RcDoc::text("[")
-                        .append(RcDoc::intersperse(docs, RcDoc::text(", ")))
+                        .append(
+                            RcDoc::line_()
+                                .append(RcDoc::intersperse(docs?, RcDoc::text(",").append(RcDoc::line())))
+                                .nest(context.config.indent_width as isize),
+                        )
+                        .append(RcDoc::line_())
                         .append(RcDoc::text("]")),
                 )
             }
@@ -705,18 +782,21 @@ impl Doc for MatchArm {
                 .append(p.to_doc(context)?)
                 .append(RcDoc::text(": "))
                 .append(RcDoc::as_string(ty))
-                .append(RcDoc::text(")")),
+                .append(RcDoc::text(")"))
+                .group(),
             MatchPattern::Right(p, ty) => RcDoc::text("Right(")
                 .append(p.to_doc(context)?)
                 .append(RcDoc::text(": "))
                 .append(RcDoc::as_string(ty))
-                .append(RcDoc::text(")")),
+                .append(RcDoc::text(")"))
+                .group(),
             MatchPattern::None => RcDoc::text("None"),
             MatchPattern::Some(p, ty) => RcDoc::text("Some(")
                 .append(p.to_doc(context)?)
                 .append(RcDoc::text(": "))
                 .append(RcDoc::as_string(ty))
-                .append(RcDoc::text(")")),
+                .append(RcDoc::text(")"))
+                .group(),
             MatchPattern::False => RcDoc::text("false"),
             MatchPattern::True => RcDoc::text("true"),
         };

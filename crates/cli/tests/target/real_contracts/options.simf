@@ -114,16 +114,18 @@ fn ensure_correct_change_at_index(
     let (asset_bits, available_asset_amount): (u256, u64) = get_input_explicit_asset_amount(index);
     assert!(jet::eq_256(unwrap(jet::input_script_hash(index)), contract_script_hash));
     assert!(jet::eq_32(jet::current_index(), index));
+
     match is_change_needed {
         false => {
             assert!(jet::eq_64(asset_amount_to_spend, available_asset_amount))
         },
         true => {
             ensure_input_and_output_script_hash_eq(index);
-            let (carry, collateral_change): (bool, u64) = jet::subtract_64(
-                available_asset_amount,
-                asset_amount_to_spend
-            );
+
+            let (
+                carry,
+                collateral_change
+            ): (bool, u64) = jet::subtract_64(available_asset_amount, asset_amount_to_spend);
             ensure_zero_bit(carry);
             ensure_output_asset_with_amount_eq(index, asset_id, collateral_change);
         }
@@ -142,12 +144,15 @@ fn check_y(expected_y: Fe, actual_y: Fe) {
 fn ensure_input_and_output_reissuance_token_eq(index: u32) {
     let (input_asset, input_amount): (Asset1, Amount1) = unwrap(jet::input_amount(index));
     let (output_asset, output_amount): (Asset1, Amount1) = unwrap(jet::output_amount(index));
+
     match (input_asset) {
         Left(in_conf: Point) => {
             let (input_asset_parity, input_asset_x): (u1, u256) = in_conf;
-            let (output_asset_parity, output_asset_x): (u1, u256) = unwrap_left::<u256>(
-                output_asset
-            );
+            let (
+                output_asset_parity,
+                output_asset_x
+            ): (u1, u256) = unwrap_left::<u256>(output_asset);
+
             assert!(jet::eq_1(input_asset_parity, output_asset_parity));
             assert!(jet::eq_256(input_asset_x, output_asset_x));
         },
@@ -156,12 +161,15 @@ fn ensure_input_and_output_reissuance_token_eq(index: u32) {
             assert!(jet::eq_256(in_expl, out_expl));
         }
     };
+
     match (input_amount) {
         Left(in_conf: Point) => {
             let (input_amount_parity, input_amount_x): (u1, u256) = in_conf;
-            let (output_amount_parity, output_amount_x): (u1, u256) = unwrap_left::<u64>(
-                output_amount
-            );
+            let (
+                output_amount_parity,
+                output_amount_x
+            ): (u1, u256) = unwrap_left::<u64>(output_amount);
+
             assert!(jet::eq_1(input_amount_parity, output_amount_parity));
             assert!(jet::eq_256(input_amount_x, output_amount_x));
         },
@@ -240,6 +248,7 @@ fn funding_path(
 ) {
     ensure_input_and_output_script_hash_eq(0);
     ensure_input_and_output_script_hash_eq(1);
+
     verify_input_reissuance_token(
         0,
         param::OPTION_REISSUANCE_TOKEN_ASSET,
@@ -252,6 +261,7 @@ fn funding_path(
         input_grantor_abf,
         input_grantor_vbf
     );
+
     verify_output_reissuance_token(
         0,
         param::OPTION_REISSUANCE_TOKEN_ASSET,
@@ -264,12 +274,17 @@ fn funding_path(
         output_grantor_abf,
         output_grantor_vbf
     );
+
     assert!(dbg!(jet::eq_256(get_output_script_hash(0), get_output_script_hash(1))));
+
     assert!(jet::le_32(jet::current_index(), 1));
+
     ensure_output_script_hash_eq(2, get_output_script_hash(0));
-    let (collateral_asset_bits, collateral_amount): (u256, u64) = get_output_explicit_asset_amount(
-        2
-    );
+
+    let (
+        collateral_asset_bits,
+        collateral_amount
+    ): (u256, u64) = get_output_explicit_asset_amount(2);
     let option_token_amount: u64 = unwrap_right::<(u1, u256)>(
         unwrap(unwrap(jet::issuance_asset_amount(0)))
     );
@@ -277,8 +292,10 @@ fn funding_path(
         unwrap(unwrap(jet::issuance_asset_amount(1)))
     );
     assert!(jet::eq_64(option_token_amount, grantor_token_amount));
+
     divmod_eq(collateral_amount, param::COLLATERAL_PER_CONTRACT, option_token_amount);
     divmod_eq(expected_asset_amount, param::SETTLEMENT_PER_CONTRACT, option_token_amount);
+
     ensure_output_asset_with_amount_eq(2, param::COLLATERAL_ASSET_ID, collateral_amount);
     ensure_output_asset_with_amount_eq(3, param::OPTION_TOKEN_ASSET, option_token_amount);
     ensure_output_asset_with_amount_eq(4, param::GRANTOR_TOKEN_ASSET, grantor_token_amount);
@@ -417,17 +434,17 @@ fn main() {
         Left(left_or_right: Either<(u64, u256, u256, u256, u256, u256, u256, u256, u256), Either<(bool, u64, u64, u64), (bool, u64, u64)>>) => {
             match left_or_right {
                 Left(params: (u64, u256, u256, u256, u256, u256, u256, u256, u256)) => {
-                    let (expected_asset_amount, input_option_abf, input_option_vbf, input_grantor_abf, input_grantor_vbf, output_option_abf, output_option_vbf, output_grantor_abf, output_grantor_vbf): (
-                    u64,
-                        u256,
-                        u256,
-                        u256,
-                        u256,
-                        u256,
-                        u256,
-                        u256,
-                        u256
-                    ) = params;
+                    let (
+                        expected_asset_amount,
+                        input_option_abf,
+                        input_option_vbf,
+                        input_grantor_abf,
+                        input_grantor_vbf,
+                        output_option_abf,
+                        output_option_vbf,
+                        output_grantor_abf,
+                        output_grantor_vbf
+                    ): (u64, u256, u256, u256, u256, u256, u256, u256, u256) = params;
                     funding_path(
                         expected_asset_amount,
                         input_option_abf,
@@ -443,12 +460,12 @@ fn main() {
                 Right(exercise_or_settlement: Either<(bool, u64, u64, u64), (bool, u64, u64)>) => {
                     match exercise_or_settlement {
                         Left(params: (bool, u64, u64, u64)) => {
-                            let (is_change_needed, amount_to_burn, collateral_amount, asset_amount): (
-                            bool,
-                                u64,
-                                u64,
-                                u64
-                            ) = dbg!(params);
+                            let (
+                                is_change_needed,
+                                amount_to_burn,
+                                collateral_amount,
+                                asset_amount
+                            ): (bool, u64, u64, u64) = dbg!(params);
                             exercise_path(
                                 amount_to_burn,
                                 collateral_amount,
@@ -457,11 +474,11 @@ fn main() {
                             )
                         },
                         Right(params: (bool, u64, u64)) => {
-                            let (is_change_needed, amount_to_burn, asset_amount): (
-                            bool,
-                                u64,
-                                u64
-                            ) = dbg!(params);
+                            let (
+                                is_change_needed,
+                                amount_to_burn,
+                                asset_amount
+                            ): (bool, u64, u64) = dbg!(params);
                             settlement_path(amount_to_burn, asset_amount, is_change_needed)
                         }
                     }
@@ -471,19 +488,19 @@ fn main() {
         Right(left_or_right: Either<(bool, u64, u64), (bool, u64, u64)>) => {
             match left_or_right {
                 Left(params: (bool, u64, u64)) => {
-                    let (is_change_needed, grantor_token_amount_to_burn, collateral_amount): (
-                    bool,
-                        u64,
-                        u64
-                    ) = params;
+                    let (
+                        is_change_needed,
+                        grantor_token_amount_to_burn,
+                        collateral_amount
+                    ): (bool, u64, u64) = params;
                     expiry_path(grantor_token_amount_to_burn, collateral_amount, is_change_needed)
                 },
                 Right(params: (bool, u64, u64)) => {
-                    let (is_change_needed, amount_to_burn, collateral_amount): (
-                    bool,
-                        u64,
-                        u64
-                    ) = params;
+                    let (
+                        is_change_needed,
+                        amount_to_burn,
+                        collateral_amount
+                    ): (bool, u64, u64) = params;
                     cancellation_path(amount_to_burn, collateral_amount, is_change_needed)
                 }
             }
