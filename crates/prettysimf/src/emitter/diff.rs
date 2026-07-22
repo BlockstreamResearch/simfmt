@@ -1,6 +1,6 @@
 use super::*;
 use crate::utils::{OutputWriter, Verbosity};
-use similar::{ChangeTag, TextDiff};
+use similar::{ChangeTag, DiffTag, TextDiff};
 
 pub(crate) struct DiffEmitter {
     config: EmitterConfig,
@@ -22,9 +22,13 @@ impl Emitter for DiffEmitter {
             formatted_text,
         }: FormattedFile<'_>,
     ) -> Result<EmitterResult, io::Error> {
-        const CONTEXT_SIZE: usize = 3;
-        let mismatch = make_diff(original_text, formatted_text, CONTEXT_SIZE);
-        let has_diff = !mismatch.newline_terminated();
+        if differ_only_in_newline_style(original_text, formatted_text) {
+            writeln!(output, "Incorrect newline style in {filename}")?;
+            return Ok(EmitterResult { has_diff: true });
+        }
+
+        let mismatch = make_diff(original_text, formatted_text);
+        let has_diff = mismatch.ops().iter().any(|op| op.tag() != DiffTag::Equal);
 
         if has_diff {
             if self.config.print_misformatted_file_names {
@@ -43,12 +47,6 @@ impl Emitter for DiffEmitter {
                     &self.config,
                 );
             }
-        } else if original_text != formatted_text {
-            // This occurs when the only difference between the original and formatted values
-            // is the newline style. This happens because The make_diff function compares the
-            // original and formatted values line by line, independent of line endings.
-            writeln!(output, "Incorrect newline style in {filename}")?;
-            return Ok(EmitterResult { has_diff: true });
         }
 
         Ok(EmitterResult { has_diff })
@@ -64,21 +62,31 @@ where
     } else {
         ""
     };
+    let mut writer = OutputWriter::new(config.color);
+    writer.writeln(&get_section_title(None), None);
 
     for mismatch in diff.iter_all_changes() {
-        let title = get_section_title(mismatch.old_index());
-        OutputWriter::writeln(&title);
-
-        let str = mismatch.value();
+        let line = mismatch.value();
         match mismatch.tag() {
-            ChangeTag::Equal => OutputWriter::writeln(&format!(" {str}{line_terminator}")),
-            ChangeTag::Delete => OutputWriter::writeln(&format!("-{str}{line_terminator}")),
-            ChangeTag::Insert => OutputWriter::writeln(&format!("+{str}{line_terminator}")),
+            ChangeTag::Equal => writer.write(&format!(" {line}{line_terminator}"), None),
+            ChangeTag::Delete => writer.write(&format!("-{line}{line_terminator}"), Some(term::color::RED)),
+            ChangeTag::Insert => writer.write(&format!("+{line}{line_terminator}"), Some(term::color::GREEN)),
         }
     }
 }
 
-fn make_diff<'a>(original: &'a str, formatted: &'a str, context_size: usize) -> TextDiff<'a, 'a, str> {
+fn strip_line_terminator(line: &str) -> &str {
+    line.strip_suffix("\r\n")
+        .or_else(|| line.strip_suffix('\n'))
+        .or_else(|| line.strip_suffix('\r'))
+        .unwrap_or(line)
+}
+
+fn differ_only_in_newline_style(original: &str, formatted: &str) -> bool {
+    original != formatted && original.replace("\r\n", "\n") == formatted.replace("\r\n", "\n")
+}
+
+fn make_diff<'a>(original: &'a str, formatted: &'a str) -> TextDiff<'a, 'a, str> {
     let diff = similar::TextDiff::from_lines(original, formatted);
     diff
 }
@@ -87,6 +95,31 @@ fn make_diff<'a>(original: &'a str, formatted: &'a str, context_size: usize) -> 
 mod tests {
     use super::*;
     use std::path::PathBuf;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[test]
+    fn prints_a_single_header_per_file() {
+        let header_calls = AtomicUsize::new(0);
+
+        print_diff(
+            TextDiff::from_lines("one\ntwo\n", "one\nthree\n"),
+            |_| {
+                header_calls.fetch_add(1, Ordering::Relaxed);
+                "Diff in test.simf:".to_owned()
+            },
+            &EmitterConfig::default(),
+        );
+
+        assert_eq!(header_calls.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn removes_only_the_line_terminator() {
+        assert_eq!(strip_line_terminator("text\n"), "text");
+        assert_eq!(strip_line_terminator("text\r\n"), "text");
+        assert_eq!(strip_line_terminator("text\r"), "text");
+        assert_eq!(strip_line_terminator("text  "), "text  ");
+    }
 
     #[test]
     fn does_not_print_when_no_files_reformatted() {

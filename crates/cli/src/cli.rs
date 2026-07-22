@@ -360,7 +360,7 @@ fn determine_operation(matches: &Matches) -> anyhow::Result<Operation, Operation
             _ => Err(OperationError::UnknownHelpTopic(topic)),
         };
     }
-    let mut free_matches = matches.free.iter();
+    let mut free_matches = matches.free.iter().filter(|x| !x.is_empty());
 
     let mut minimal_config_path = None;
     if let Some(kind) = matches.opt_str("print-config") {

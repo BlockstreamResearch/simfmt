@@ -1,7 +1,8 @@
 pub(crate) use self::diff::*;
 pub(crate) use self::files::*;
 pub(crate) use self::stdout::*;
-use crate::utils::{EmitMode, FileName, Verbosity};
+use crate::config::Color;
+use crate::utils::{FileName, Verbosity};
 use std::io::{self, Write};
 use std::path::Path;
 
@@ -48,6 +49,7 @@ pub struct EmitterConfig {
     /// Responsible for printing values in console in `check` mode
     pub print_misformatted_file_names: bool,
     pub verbose: Verbosity,
+    pub color: Color,
 }
 
 impl Default for EmitterConfig {
@@ -55,6 +57,7 @@ impl Default for EmitterConfig {
         Self {
             print_misformatted_file_names: false,
             verbose: Default::default(),
+            color: Default::default(),
         }
     }
 }

@@ -356,6 +356,7 @@ impl FmtConfig {
         EmitterConfig {
             print_misformatted_file_names: self.print_misformatted_file_names(),
             verbose: self.verbose(),
+            color: self.color(),
         }
     }
 }
@@ -409,6 +410,14 @@ mod tests {
                 ..PartialConfig::default()
             }
         );
+    }
+
+    #[test]
+    fn emitter_config_preserves_color() {
+        let mut config = FmtConfig::default();
+        config.set().color(Color::Always);
+
+        assert_eq!(config.get_emitter_conf().color, Color::Always);
     }
 
     #[test]

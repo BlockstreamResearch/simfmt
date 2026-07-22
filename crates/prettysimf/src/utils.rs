@@ -1,5 +1,5 @@
 use super::error::BuildError;
-use crate::config::FmtConfig;
+use crate::config::{Color, FmtConfig};
 use crate::emitter;
 use crate::emitter::{Emitter, EmitterConfig};
 use globwalk::FileType;
@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use simplicityhl::tracker::TrackerLogLevel;
 use std::fs::File;
 use std::io::Read;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use std::{env, fmt, io};
@@ -96,11 +97,45 @@ impl fmt::Display for FileName {
     }
 }
 
-pub(crate) struct OutputWriter {}
+/// Writes to standard output, using colors when the requested terminal supports them.
+pub(crate) struct OutputWriter {
+    terminal: Option<Box<term::StdoutTerminal>>,
+}
 
 impl OutputWriter {
-    pub(crate) fn writeln(msg: &str) {
-        println!("{msg}")
+    pub(crate) fn new(color: Color) -> Self {
+        let terminal = term::stdout().filter(|terminal| color.use_colored_tty() && terminal.supports_color());
+        Self { terminal }
+    }
+
+    pub(crate) fn writeln(&mut self, msg: &str, color: Option<term::color::Color>) {
+        match &mut self.terminal {
+            Some(terminal) => {
+                if let Some(color) = color {
+                    terminal.fg(color).unwrap();
+                }
+                writeln!(terminal, "{msg}").unwrap();
+                if color.is_some() {
+                    terminal.reset().unwrap();
+                }
+            }
+            None => println!("{msg}"),
+        }
+    }
+
+    pub(crate) fn write(&mut self, msg: &str, color: Option<term::color::Color>) {
+        match &mut self.terminal {
+            Some(terminal) => {
+                if let Some(color) = color {
+                    terminal.fg(color).unwrap();
+                }
+                write!(terminal, "{msg}").unwrap();
+                if color.is_some() {
+                    terminal.reset().unwrap();
+                }
+            }
+            None => print!("{msg}"),
+        }
     }
 }
 

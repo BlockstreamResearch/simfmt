@@ -1,4 +1,4 @@
-use crate::config::{FmtConfig, InnerFmtConfig};
+use crate::config::{FmtConfig, InnerFmtConfig, NewlineStyle};
 use crate::error::ErrorKind;
 use crate::fmt_processor::{FormatHandler, FormattingError};
 use crate::newline_style::apply_newline_style;
@@ -67,6 +67,12 @@ impl<'a, T: FormatHandler + 'a> FormatContext<'a, T> {
         let formatting_config = self.fmt_config.formatting_config();
         raw_ctx.format_lines(&formatting_config);
 
+        ensure_single_trailing_newline(
+            self.fmt_config.newline_style(),
+            &mut raw_ctx.buffer,
+            raw_ctx.input_text.as_ref(),
+        );
+
         apply_newline_style(
             self.fmt_config.newline_style(),
             &mut raw_ctx.buffer,
@@ -78,9 +84,48 @@ impl<'a, T: FormatHandler + 'a> FormatContext<'a, T> {
     }
 }
 
+fn ensure_single_trailing_newline(newline_style: NewlineStyle, formatted_text: &mut String, raw_input_text: &str) {
+    if formatted_text.is_empty() {
+        return;
+    }
+
+    let content_len = formatted_text.trim_end_matches(['\r', '\n']).len();
+    formatted_text.truncate(content_len);
+    formatted_text.push_str("\n");
+}
+
 fn simplicity_err_to_fmt_err(simplicity_errs: Vec<RichError>) -> Vec<FormattingError> {
     simplicity_errs
         .into_iter()
         .map(FormattingError::from_simplicity_err)
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ensures_exactly_one_trailing_newline() {
+        let mut formatted = String::from("fn main() {}\n\n\n");
+        ensure_single_trailing_newline(NewlineStyle::Unix, &mut formatted, "");
+
+        assert_eq!(formatted, "fn main() {}\n");
+    }
+
+    #[test]
+    fn uses_the_auto_detected_newline_style() {
+        let mut formatted = String::from("fn main() {}");
+        ensure_single_trailing_newline(NewlineStyle::Auto, &mut formatted, "fn main() {}\r\n");
+
+        assert_eq!(formatted, "fn main() {}\r\n");
+    }
+
+    #[test]
+    fn leaves_empty_formatted_text_empty() {
+        let mut formatted = String::new();
+        ensure_single_trailing_newline(NewlineStyle::Unix, &mut formatted, "");
+
+        assert!(formatted.is_empty());
+    }
 }
