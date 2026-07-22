@@ -2,9 +2,8 @@ use crate::simplicity_fmt::core::Context;
 use either::Either;
 use pretty::RcDoc;
 use simplicityhl::parse::{
-    Assignment, Call, CallName, Expression, ExpressionInner, Function, FunctionParam, Item, Match, MatchArm,
-    MatchPattern, Module, Program, SingleExpression, SingleExpressionInner, Statement, TypeAlias, UseDecl, UseItems,
-    Visibility,
+    Assignment, Call, Expression, ExpressionInner, Function, FunctionParam, Item, Match, MatchArm, MatchPattern,
+    Module, Program, SingleExpression, SingleExpressionInner, Statement, TypeAlias, UseDecl, UseItems, Visibility,
 };
 use simplicityhl::pattern::Pattern;
 use simplicityhl::types::{AliasedType, TypeDeconstructible};

@@ -5,7 +5,6 @@ use crate::utils::FileName;
 use crate::reporter::FormatReport;
 use std::collections::HashMap;
 use std::sync::Arc;
-// todo: add module resolution logic
 
 pub(crate) type SourceFile = Vec<FileRecord>;
 pub(crate) type FileRecord = (FileName, String);

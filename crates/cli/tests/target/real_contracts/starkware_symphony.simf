@@ -52,7 +52,6 @@ fn channel_mix_256(state: ChannelState, input: u256) -> ChannelState {
     jet::sha_256_ctx_8_finalize(ctx)
 }
 
-
 fn channel_mix(state: ChannelState) -> ChannelState {
     sha256(state)
 }
@@ -162,7 +161,6 @@ fn test_decommitment() {
         68599396864515883651939550638527607595242626780681277342646949156789742939178,
         56974666195930694403713290580441264812544914556973432228768127355537336583012
     ];
-
     let (_, auth_path): (bool, u32) = jet::add_32(leaf_id, 8192);
     merkle_verify_32(leaf, auth_path, proof, root);
 }
@@ -359,12 +357,10 @@ fn fibsquare_eval_p1(x: u32, f_x: u32) -> u32 {
 
 fn fibsquare_eval_p2(x: u32, f_x: u32, f_gx: u32, f_ggx: u32) -> u32 {
     let num0: u32 = sub_mod(f_ggx, add_mod(mul_mod(f_x, f_x), mul_mod(f_gx, f_gx)));
-
     let num1: u32 = mul_mod(
         mul_mod(sub_mod(x, 2342081930), sub_mod(x, 2450347685)),
         sub_mod(x, 532203874)
     );
-
     let den: u32 = sub_mod(exp_mod(x, 1024), 1);
     div_mod(mul_mod(num0, num1), den)
 }
@@ -424,9 +420,7 @@ type FriLastLayer = u32;
 
 fn fri_read_commitment(layer: FriLayer, state: ChannelState) -> ChannelState {
     let (cp_mt_root, beta, _, _, _, _): FriLayer = layer;
-
     let state: ChannelState = channel_mix_256(state, cp_mt_root);
-
     let (state, random): (ChannelState, u32) = channel_draw_32(state, 3221225473);
     assert!(jet::eq_32(random, beta));
     state
@@ -596,21 +590,13 @@ type Eval = (u32, MerkleProof32);
 
 fn verify_proof(proof: FibSquareProof) {
     let (p_mt_root, evals, fri_layers, last_layer): FibSquareProof = proof;
-
     let state: ChannelState = sha256(p_mt_root);
-
     let (state, coeffs): (ChannelState, FibSquareCoeffs) = fibsquare_read_coefficients(state);
-
     let state: ChannelState = fri_read_commitments_32(fri_layers, last_layer, state);
-
     let (state, idx): (ChannelState, u32) = channel_draw_32(state, 8192);
-
     let state: ChannelState = fibsquare_read_evaluations_checked(state, evals, idx, p_mt_root);
-
     let x: u32 = fibsquare_calc_x(idx);
-
     let cp_ev: u32 = fibsquare_compose(x, coeffs, evals);
-
     fri_verify_32(fri_layers, last_layer, idx, x, cp_ev);
 }
 

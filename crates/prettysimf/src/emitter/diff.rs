@@ -22,13 +22,13 @@ impl Emitter for DiffEmitter {
             formatted_text,
         }: FormattedFile<'_>,
     ) -> Result<EmitterResult, io::Error> {
-        if differ_only_in_newline_style(original_text, formatted_text) {
+        let mismatch = make_diff(original_text, formatted_text);
+        let has_diff = mismatch.ops().iter().any(|op| op.tag() != DiffTag::Equal);
+
+        if mismatch.newline_terminated() && has_diff {
             writeln!(output, "Incorrect newline style in {filename}")?;
             return Ok(EmitterResult { has_diff: true });
         }
-
-        let mismatch = make_diff(original_text, formatted_text);
-        let has_diff = mismatch.ops().iter().any(|op| op.tag() != DiffTag::Equal);
 
         if has_diff {
             if self.config.print_misformatted_file_names {
@@ -38,7 +38,7 @@ impl Emitter for DiffEmitter {
                     mismatch,
                     |line_num| match line_num {
                         None => {
-                            format!("Diff in {}:", filename)
+                            format!("Diff in {}: ", filename)
                         }
                         Some(line_num) => {
                             format!("Diff in {}:{}:", filename, line_num)
@@ -66,7 +66,7 @@ where
     writer.writeln(&get_section_title(None), None);
 
     for mismatch in diff.iter_all_changes() {
-        let line = mismatch.value();
+        let line = dbg!(mismatch).value();
         match mismatch.tag() {
             ChangeTag::Equal => writer.write(&format!(" {line}{line_terminator}"), None),
             ChangeTag::Delete => writer.write(&format!("-{line}{line_terminator}"), Some(term::color::RED)),
@@ -80,10 +80,6 @@ fn strip_line_terminator(line: &str) -> &str {
         .or_else(|| line.strip_suffix('\n'))
         .or_else(|| line.strip_suffix('\r'))
         .unwrap_or(line)
-}
-
-fn differ_only_in_newline_style(original: &str, formatted: &str) -> bool {
-    original != formatted && original.replace("\r\n", "\n") == formatted.replace("\r\n", "\n")
 }
 
 fn make_diff<'a>(original: &'a str, formatted: &'a str) -> TextDiff<'a, 'a, str> {
