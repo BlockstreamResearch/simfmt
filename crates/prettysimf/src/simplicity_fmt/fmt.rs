@@ -51,13 +51,13 @@ mod tests {
     use super::{InnerFmtConfig, format_program};
     use simplicityhl::UnstableFeatures;
     use simplicityhl::parse::Program;
-    use simplicityhl::source::SourceFile;
-    use std::sync::Arc;
 
     fn format(source: &str) -> String {
-        let source_file = SourceFile::anonymous(Arc::from(source));
-        let parsed = Program::parse_for_formatting(0, &source_file, &UnstableFeatures::none())
-            .expect("source parses for formatting");
+        format_with_features(source, &UnstableFeatures::none())
+    }
+
+    fn format_with_features(source: &str, features: &UnstableFeatures) -> String {
+        let parsed = Program::parse_for_formatting(0, source, features).expect("source parses for formatting");
         format_program(&parsed, source, &InnerFmtConfig::default()).expect("source formats")
     }
 
@@ -108,8 +108,7 @@ fn                         {}                 second()                  {}
             assert!(formatted.contains(comment), "missing {comment}");
         }
         assert_eq!(format(&formatted), formatted);
-        let source_file = SourceFile::anonymous(Arc::from(formatted.as_str()));
-        Program::parse_for_formatting(0, &source_file, &UnstableFeatures::none()).expect("formatted source reparses");
+        Program::parse_for_formatting(0, &formatted, &UnstableFeatures::none()).expect("formatted source reparses");
     }
 
     //todo: remove or refactosr these complex tests
@@ -171,14 +170,13 @@ fn {} first() {} {{
             line_comment[5],
         );
 
-        let formatted = dbg!(format(dbg!(&source)));
+        let formatted = format(&source);
 
         for comment in line_comment.iter().chain(block_comment.iter()) {
             assert!(formatted.contains(comment), "missing {comment}");
         }
         assert_eq!(format(&formatted), formatted);
-        let source_file = SourceFile::anonymous(Arc::from(formatted.as_str()));
-        Program::parse_for_formatting(0, &source_file, &UnstableFeatures::none()).expect("formatted source reparses");
+        Program::parse_for_formatting(0, &formatted, &UnstableFeatures::none()).expect("formatted source reparses");
     }
 
     #[test]
@@ -195,6 +193,36 @@ fn {} first() {} {{
         assert!(formatted.starts_with("// header\nsimc \"*\";"));
         assert!(formatted.contains("// body"));
         assert_eq!(format(&formatted), formatted);
+    }
+
+    #[test]
+    fn formats_enum_declarations_constructions_and_matches() {
+        let source = "enum Action{Stop,Refresh(u8,bool),}\n\
+                      fn main(value:Action){\
+                      let next:Action=Action::Refresh(1,true);\
+                      match value{\
+                      Action::Stop=>(),\
+                      Action::Refresh(number:u8,flag:bool)=>number,\
+                      }}";
+        let formatted = format_with_features(source, &UnstableFeatures::all());
+
+        assert_eq!(
+            formatted,
+            r#"enum Action {
+    Stop,
+    Refresh(u8, bool),
+}
+fn main(value: Action) {
+    let next: Action = Action::Refresh(1, true);
+    match value {
+        Action::Stop => {},
+        Action::Refresh(number: u8, flag: bool) => {
+            number
+        }
+    }
+}"#
+        );
+        assert_eq!(format_with_features(&formatted, &UnstableFeatures::all()), formatted);
     }
 
     #[test]

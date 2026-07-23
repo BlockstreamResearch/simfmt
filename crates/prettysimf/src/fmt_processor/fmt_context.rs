@@ -4,9 +4,8 @@ use crate::fmt_processor::{FormatHandler, FormattingError};
 use crate::newline_style::apply_newline_style;
 use crate::reporter::FormatReport;
 use crate::utils::{FileName, Input};
-use simplicityhl::error::RichError;
+use simplicityhl::error::Diagnostic;
 use simplicityhl::parse::{ParsedSource, Program};
-use simplicityhl::source::SourceFile;
 use std::sync::Arc;
 
 pub struct FormatContext<'a, T: FormatHandler> {
@@ -21,7 +20,7 @@ pub struct RawFormatContext {
     buffer: String,
 }
 
-pub type ParsedProgram<'src> = Result<ParsedSource<'src>, Vec<RichError>>;
+pub type ParsedProgram<'src> = Result<ParsedSource<'src>, Vec<Diagnostic>>;
 
 impl RawFormatContext {
     pub fn new(input: Input) -> Result<Self, ErrorKind> {
@@ -38,8 +37,7 @@ impl RawFormatContext {
     }
 
     pub fn format_lines(&mut self, fmt_config: &InnerFmtConfig) {
-        let source = SourceFile::anonymous(self.input_text.clone());
-        let parsed = Program::parse_for_formatting(0, &source, &simplicityhl::UnstableFeatures::none());
+        let parsed = Program::parse_for_formatting(0, self.input_text.as_ref(), &simplicityhl::UnstableFeatures::all());
 
         match parsed {
             Ok(parsed) => {
@@ -92,9 +90,10 @@ fn ensure_single_trailing_newline(newline_style: NewlineStyle, formatted_text: &
     let content_len = formatted_text.trim_end_matches(['\r', '\n']).len();
     formatted_text.truncate(content_len);
     formatted_text.push_str("\n");
+    apply_newline_style(newline_style, formatted_text, raw_input_text);
 }
 
-fn simplicity_err_to_fmt_err(simplicity_errs: Vec<RichError>) -> Vec<FormattingError> {
+fn simplicity_err_to_fmt_err(simplicity_errs: Vec<Diagnostic>) -> Vec<FormattingError> {
     simplicity_errs
         .into_iter()
         .map(FormattingError::from_simplicity_err)

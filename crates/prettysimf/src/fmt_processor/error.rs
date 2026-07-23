@@ -1,5 +1,5 @@
 use crate::error::ErrorKind;
-use simplicityhl::error::{RichError, Span};
+use simplicityhl::error::{Diagnostic, Location};
 
 #[derive(Debug)]
 pub(crate) struct FormattingError {
@@ -21,13 +21,17 @@ impl FormattingError {
     //     }
     // }
 
-    pub(crate) fn from_simplicity_err(simplicity_err: RichError) -> FormattingError {
+    pub(crate) fn from_simplicity_err(simplicity_err: Diagnostic) -> FormattingError {
+        let line = match simplicity_err.location() {
+            Location::Code(span) => span.start,
+            Location::File(_) | Location::Global => 0,
+        };
         FormattingError {
-            line: simplicity_err.span().start,
+            line,
             is_comment: false,
             kind: ErrorKind::ParseError,
             is_string: false,
-            line_buffer: simplicity_err.span().to_string(),
+            line_buffer: simplicity_err.to_string(),
         }
     }
 
