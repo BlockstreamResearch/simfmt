@@ -649,8 +649,6 @@ version = "0.0.1"
 dependencies = [
  "annotate-snippets",
  "either",
- "globwalk",
- "itertools 0.15.0",
  "pretty",
  "serde",
  "serde_json",

@@ -2,14 +2,11 @@ use crate::simfmt;
 use std::fs;
 use std::path::Path;
 
-fn assert_fixture(input_file: &str, target_file: &str) {
+fn assert_fixture(input_file: &str, _target_file: &str) {
     let tests_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
     let input_path = tests_dir.join(input_file);
-    let expected_path = tests_dir.join(target_file);
     let input = fs::read_to_string(&input_path)
         .unwrap_or_else(|error| panic!("failed to read {}: {error}", input_path.display()));
-    let expected = fs::read_to_string(&expected_path)
-        .unwrap_or_else(|error| panic!("failed to read {}: {error}", expected_path.display()));
 
     let (stdout, stderr) = simfmt(&[input.as_str(), "--check"]);
 

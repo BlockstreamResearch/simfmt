@@ -60,8 +60,9 @@ impl<'a> fmt::Display for FormatReportFormatter<'a> {
         for (file, errors) in errors_by_file {
             for error in errors {
                 let error_kind = error.kind.to_string();
+                let message = error.message.as_deref().unwrap_or(&error_kind);
 
-                let mut title = error_kind_to_snippet_annotation_level(&error.kind).primary_title(&error_kind);
+                let mut title = error_kind_to_snippet_annotation_level(&error.kind).primary_title(message);
 
                 if error.is_internal() {
                     title = title.id("internal");
@@ -69,19 +70,13 @@ impl<'a> fmt::Display for FormatReportFormatter<'a> {
 
                 let mut group = Group::with_title(title);
 
-                let message_suffix = error.msg_suffix();
-                if !message_suffix.is_empty() {
-                    group = group.element(Level::NOTE.message(message_suffix));
+                if error.should_render_snippet() {
+                    let snippet = Snippet::source(&error.line_buffer)
+                        .path(file.to_string())
+                        .annotations(annotation(error));
+
+                    group = group.element(snippet);
                 }
-
-                let origin = format!("{}:{}", file, error.line);
-                let snippet = Snippet::source(&error.line_buffer)
-                    .line_start(error.line)
-                    .path(&origin)
-                    .fold(false)
-                    .annotations(annotation(error));
-
-                group = group.element(snippet);
 
                 let report = [group];
                 writeln!(f, "{}\n", renderer.render(&report))?;
@@ -106,30 +101,28 @@ impl<'a> fmt::Display for FormatReportFormatter<'a> {
 }
 
 fn annotation(error: &FormattingError) -> Option<Annotation<'_>> {
-    let (range_start, range_length) = error.format_len();
-    let range_end = range_start + range_length;
-
-    if range_length > 0 {
-        Some(AnnotationKind::Context.span(range_start..range_end))
-    } else {
-        None
-    }
+    error.annotation_range().map(|range| {
+        let kind = if matches!(error.kind, ErrorKind::ParseError) {
+            AnnotationKind::Primary
+        } else {
+            AnnotationKind::Context
+        };
+        kind.span(range)
+    })
 }
 
 fn error_kind_to_snippet_annotation_level(error_kind: &ErrorKind) -> Level<'_> {
     match error_kind {
-        ErrorKind::LineOverflow(..)
-        | ErrorKind::TrailingWhitespace
-        | ErrorKind::IoError(_)
+        ErrorKind::IoError(_)
         | ErrorKind::ParseError
-        | ErrorKind::LostComment
-        | ErrorKind::BadAttr
-        | ErrorKind::VersionMismatch => Level::ERROR,
-        ErrorKind::DeprecatedAttr => Level::WARNING,
+        | ErrorKind::LostComment(_)
+        | ErrorKind::FailedToBuildDocument
+        | ErrorKind::FailedToRenderDocument
+        | ErrorKind::InvalidFormattedOutput(_) => Level::ERROR,
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct FormatReport {
     // Maps stringified file paths to their associated formatting errors.
     pub(crate) internal: Rc<RefCell<(FormatErrorMap, ReportedErrors)>>,
@@ -148,7 +141,7 @@ impl FormatReport {
         self.non_formatted_ranges.append(&mut ranges);
     }
 
-    pub fn append(&self, f: FileName, mut v: Vec<FormattingError>) {
+    pub(crate) fn append(&self, f: FileName, mut v: Vec<FormattingError>) {
         self.track_errors(&v);
         self.internal
             .borrow_mut()
@@ -158,30 +151,17 @@ impl FormatReport {
             .or_insert(v);
     }
 
-    pub fn track_errors(&self, new_errors: &[FormattingError]) {
+    pub(crate) fn track_errors(&self, new_errors: &[FormattingError]) {
         let errs = &mut self.internal.borrow_mut().1;
         if !new_errors.is_empty() {
             errs.has_formatting_errors = true;
         }
-        if errs.has_operational_errors && errs.has_check_errors && errs.has_unformatted_code_errors {
+        if errs.has_unformatted_code_errors {
             return;
         }
         for err in new_errors {
-            match err.kind {
-                ErrorKind::LineOverflow(..) => {
-                    errs.has_operational_errors = true;
-                }
-                ErrorKind::TrailingWhitespace => {
-                    errs.has_operational_errors = true;
-                    errs.has_unformatted_code_errors = true;
-                }
-                ErrorKind::LostComment => {
-                    errs.has_unformatted_code_errors = true;
-                }
-                ErrorKind::DeprecatedAttr | ErrorKind::BadAttr | ErrorKind::VersionMismatch => {
-                    errs.has_check_errors = true;
-                }
-                _ => {}
+            if let ErrorKind::LostComment(_) = err.kind {
+                errs.has_unformatted_code_errors = true;
             }
         }
     }

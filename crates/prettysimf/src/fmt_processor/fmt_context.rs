@@ -36,18 +36,15 @@ impl RawFormatContext {
         })
     }
 
-    pub fn format_lines(&mut self, fmt_config: &InnerFmtConfig) {
-        let parsed = Program::parse_for_formatting(0, self.input_text.as_ref(), &simplicityhl::UnstableFeatures::all());
+    pub(crate) fn format_lines(&mut self, fmt_config: &InnerFmtConfig) -> Result<(), Vec<FormattingError>> {
+        let parsed = Program::parse_for_formatting(0, self.input_text.as_ref(), &simplicityhl::UnstableFeatures::all())
+            .map_err(|diagnostics| simplicity_err_to_fmt_err(diagnostics, self.input_text.as_ref()))?;
 
-        match parsed {
-            Ok(parsed) => {
-                match crate::simplicity_fmt::fmt::format_program(&parsed, self.input_text.as_ref(), &fmt_config) {
-                    Ok(formatted) => self.buffer.push_str(&formatted),
-                    Err(_) => self.buffer.push_str(self.input_text.as_ref()),
-                }
-            }
-            Err(_) => self.buffer.push_str(self.input_text.as_ref()),
-        }
+        let formatted = crate::simplicity_fmt::fmt::format_program(&parsed, self.input_text.as_ref(), fmt_config)
+            .map_err(|error| vec![FormattingError::from_error_kind(error, self.input_text.as_ref())])?;
+        self.buffer.push_str(&formatted);
+
+        Ok(())
     }
 }
 
@@ -63,7 +60,14 @@ impl<'a, T: FormatHandler + 'a> FormatContext<'a, T> {
     // Formats a single file.
     pub fn format_file(&mut self, mut raw_ctx: RawFormatContext) -> Result<(), ErrorKind> {
         let formatting_config = self.fmt_config.formatting_config();
-        raw_ctx.format_lines(&formatting_config);
+        if let Err(errors) = raw_ctx.format_lines(&formatting_config) {
+            let has_parsing_errors = errors.iter().any(|error| matches!(&error.kind, ErrorKind::ParseError));
+            self.report.append(raw_ctx.file.clone(), errors);
+            if has_parsing_errors {
+                self.report.add_parsing_error();
+            }
+            return Ok(());
+        }
 
         ensure_single_trailing_newline(
             self.fmt_config.newline_style(),
@@ -89,20 +93,21 @@ fn ensure_single_trailing_newline(newline_style: NewlineStyle, formatted_text: &
 
     let content_len = formatted_text.trim_end_matches(['\r', '\n']).len();
     formatted_text.truncate(content_len);
-    formatted_text.push_str("\n");
+    formatted_text.push('\n');
     apply_newline_style(newline_style, formatted_text, raw_input_text);
 }
 
-fn simplicity_err_to_fmt_err(simplicity_errs: Vec<Diagnostic>) -> Vec<FormattingError> {
+fn simplicity_err_to_fmt_err(simplicity_errs: Vec<Diagnostic>, source: &str) -> Vec<FormattingError> {
     simplicity_errs
         .into_iter()
-        .map(FormattingError::from_simplicity_err)
+        .map(|diagnostic| FormattingError::from_simplicity_err(diagnostic, source))
         .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::reporter::FormatReportFormatterBuilder;
 
     #[test]
     fn ensures_exactly_one_trailing_newline() {
@@ -126,5 +131,42 @@ mod tests {
         ensure_single_trailing_newline(NewlineStyle::Unix, &mut formatted, "");
 
         assert!(formatted.is_empty());
+    }
+
+    #[test]
+    fn parser_errors_are_rendered_with_source_context() {
+        let source = "// before one\n// before two\nfn main() {\n    match true {\n        false => () true => (),\n    }\n}\n// after one\n// after two\n";
+        let diagnostics = Program::parse_for_formatting(0, source, &simplicityhl::UnstableFeatures::none())
+            .expect_err("missing match-arm comma must not parse");
+        let mut report = FormatReport::new();
+        report.append(FileName::Stdin, simplicity_err_to_fmt_err(diagnostics, source));
+        report.add_parsing_error();
+
+        let rendered = FormatReportFormatterBuilder::new(&report).build().to_string();
+
+        assert!(rendered.contains("error: Grammar error: Missing ',' after a match arm"));
+        assert!(rendered.contains("--> <stdin>:5:"), "{rendered}");
+        assert!(rendered.contains("false => () true =>"));
+        assert!(rendered.contains('^'));
+        assert!(!rendered.contains("// before one"), "{rendered}");
+        assert!(!rendered.contains("// after one"), "{rendered}");
+    }
+
+    #[test]
+    fn lost_comments_are_rendered_as_user_errors() {
+        let source = "// missed comment\nfn main() {}\n";
+        let report = FormatReport::new();
+        report.append(
+            FileName::Stdin,
+            vec![FormattingError::from_error_kind(ErrorKind::LostComment(0..17), source)],
+        );
+
+        let rendered = FormatReportFormatterBuilder::new(&report).build().to_string();
+
+        assert!(rendered.contains("error: not formatted because a comment would be lost"));
+        assert!(rendered.contains("--> <stdin>:1:1"));
+        assert!(rendered.contains("// missed comment"));
+        assert!(!rendered.contains("internal"));
+        assert!(report.internal.borrow().1.has_unformatted_code_errors);
     }
 }

@@ -44,20 +44,10 @@ fn ensure_real_path(filename: &FileName) -> &Path {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct EmitterConfig {
     /// Responsible for printing values in console in `check` mode
     pub print_misformatted_file_names: bool,
     pub verbose: Verbosity,
     pub color: Color,
-}
-
-impl Default for EmitterConfig {
-    fn default() -> Self {
-        Self {
-            print_misformatted_file_names: false,
-            verbose: Default::default(),
-            color: Default::default(),
-        }
-    }
 }

@@ -11,8 +11,6 @@ workspace = true
 annotate-snippets = { version = "0.12.16" }
 pretty = { version = "0.12.5" }
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-itertools = { version = "0.15.0" }
-globwalk = { version = "0.9.1" }
 similar = { version = "3.1.1" }
 toml = { version = "0.9.8" }
 

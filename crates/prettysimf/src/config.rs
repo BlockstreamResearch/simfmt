@@ -115,6 +115,7 @@ config_type! {
     }
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for Color {
     fn default() -> Self {
         Color::Auto
@@ -139,6 +140,7 @@ config_type! {
     }
 }
 
+#[allow(clippy::derivable_impls)]
 impl Default for NewlineStyle {
     fn default() -> Self {
         NewlineStyle::Auto

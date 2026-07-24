@@ -1,8 +1,6 @@
-use super::error::BuildError;
 use crate::config::{Color, FmtConfig};
 use crate::emitter;
 use crate::emitter::{Emitter, EmitterConfig};
-use globwalk::FileType;
 use serde::{Deserialize, Serialize};
 use simplicityhl::tracker::TrackerLogLevel;
 use std::fs::File;
@@ -10,31 +8,7 @@ use std::io::Read;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
-use std::{env, fmt, io};
-
-pub struct ArtifactsResolver {}
-
-impl ArtifactsResolver {
-    pub fn resolve_files_to_build(src_dir: &String, simfs: &[String]) -> Result<Vec<PathBuf>, BuildError> {
-        let cwd = env::current_dir()?;
-        let base = cwd.join(src_dir);
-
-        let mut paths = Vec::new();
-
-        let walker = globwalk::GlobWalkerBuilder::from_patterns(base, simfs)
-            .follow_links(true)
-            .file_type(FileType::FILE)
-            .build()?
-            .filter_map(Result::ok);
-
-        for img in walker {
-            let path = img.path().to_path_buf().canonicalize()?;
-            paths.push(path);
-        }
-
-        Ok(paths)
-    }
-}
+use std::{fmt, io};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]

@@ -138,7 +138,7 @@ impl<'src> CustomEditContext<'src> {
 fn format_commented_function(function: &Function, context: &Context<'_>) -> Option<String> {
     let span = function.span();
     let mut edits = Vec::new();
-    let edit_context = CustomEditContext::new(context.source, context.config.indent_width.max(0));
+    let edit_context = CustomEditContext::new(context.source, context.config.indent_width);
     collect_custom_edits(function.body(), &edit_context, 0, &mut edits);
 
     let mut source = context.source.get(span.start..span.end)?.to_owned();

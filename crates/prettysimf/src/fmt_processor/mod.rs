@@ -4,6 +4,6 @@ mod fmt_context;
 mod session;
 
 pub use core::*;
-pub use error::*;
+pub(crate) use error::*;
 pub use fmt_context::*;
 pub use session::*;

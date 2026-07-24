@@ -1,74 +1,64 @@
 use crate::error::ErrorKind;
 use simplicityhl::error::{Diagnostic, Location};
+use std::ops::Range;
 
 #[derive(Debug)]
 pub(crate) struct FormattingError {
-    pub(crate) line: usize,
     pub(crate) kind: ErrorKind,
-    is_comment: bool,
-    is_string: bool,
     pub(crate) line_buffer: String,
+    pub(crate) message: Option<String>,
+    pub(crate) span: Option<Range<usize>>,
 }
 
 impl FormattingError {
-    // pub(crate) fn from_span(span: Span, psess: &ParseSess, kind: ErrorKind) -> FormattingError {
-    //     FormattingError {
-    //         line: todo!(), //psess.line_of_byte_pos(span.start),
-    //         is_comment: kind.is_comment(),
-    //         kind,
-    //         is_string: false,
-    //         line_buffer: todo!(), // psess.span_to_first_line_string(span),
-    //     }
-    // }
+    fn clamped_span(source: &str, span: Range<usize>) -> Range<usize> {
+        let start = span.start.min(source.len());
+        let end = span.end.min(source.len()).max(start);
+        start..end
+    }
 
-    pub(crate) fn from_simplicity_err(simplicity_err: Diagnostic) -> FormattingError {
-        let line = match simplicity_err.location() {
-            Location::Code(span) => span.start,
-            Location::File(_) | Location::Global => 0,
+    pub(crate) fn from_simplicity_err(simplicity_err: Diagnostic, source: &str) -> FormattingError {
+        let span = match simplicity_err.location() {
+            Location::Code(span) => Some(Self::clamped_span(source, span.start..span.end)),
+            Location::File(_) | Location::Global => None,
         };
+
         FormattingError {
-            line,
-            is_comment: false,
             kind: ErrorKind::ParseError,
-            is_string: false,
-            line_buffer: simplicity_err.to_string(),
+            line_buffer: source.to_owned(),
+            message: Some(simplicity_err.to_string()),
+            span,
+        }
+    }
+
+    pub(crate) fn from_error_kind(kind: ErrorKind, source: &str) -> FormattingError {
+        let span = match &kind {
+            ErrorKind::LostComment(span) => Some(Self::clamped_span(source, span.clone())),
+            ErrorKind::IoError(_)
+            | ErrorKind::ParseError
+            | ErrorKind::FailedToBuildDocument
+            | ErrorKind::FailedToRenderDocument
+            | ErrorKind::InvalidFormattedOutput(_) => None,
+        };
+
+        FormattingError {
+            kind,
+            line_buffer: source.to_owned(),
+            message: None,
+            span,
         }
     }
 
     pub(crate) fn is_internal(&self) -> bool {
-        match self.kind {
-            ErrorKind::LineOverflow(..)
-            | ErrorKind::TrailingWhitespace
-            | ErrorKind::IoError(_)
-            | ErrorKind::ParseError
-            | ErrorKind::LostComment => true,
-            _ => false,
-        }
+        matches!(self.kind, ErrorKind::IoError(_))
     }
 
-    pub(crate) fn msg_suffix(&self) -> &str {
-        if self.is_comment || self.is_string {
-            "set `error_on_unformatted = false` to suppress \
-             the warning against comments or string literals\n"
-        } else {
-            ""
-        }
+    pub(crate) fn annotation_range(&self) -> Option<Range<usize>> {
+        self.span.clone()
     }
 
-    // (space, target)
-    pub(crate) fn format_len(&self) -> (usize, usize) {
-        match self.kind {
-            ErrorKind::LineOverflow(found, max) => (max, found - max),
-            ErrorKind::TrailingWhitespace | ErrorKind::DeprecatedAttr | ErrorKind::BadAttr | ErrorKind::LostComment => {
-                let trailing_ws_start = self
-                    .line_buffer
-                    .rfind(|c: char| !c.is_whitespace())
-                    .map(|pos| pos + 1)
-                    .unwrap_or(0);
-                (trailing_ws_start, self.line_buffer.len() - trailing_ws_start)
-            }
-            _ => unreachable!(),
-        }
+    pub(crate) fn should_render_snippet(&self) -> bool {
+        self.span.is_some()
     }
 }
 

@@ -50,7 +50,7 @@ impl Emitter for DiffEmitter {
     }
 }
 
-fn print_diff<F>(diff: TextDiff<str>, get_section_title: F, config: &EmitterConfig)
+fn print_diff<F>(diff: TextDiff<'_, '_, str>, get_section_title: F, config: &EmitterConfig)
 where
     F: Fn(Option<usize>) -> String,
 {
@@ -90,8 +90,7 @@ fn strip_line_terminator(line: &str) -> &str {
 }
 
 fn make_diff<'a>(original: &'a str, formatted: &'a str) -> TextDiff<'a, 'a, str> {
-    let diff = similar::TextDiff::from_lines(original, formatted);
-    diff
+    similar::TextDiff::from_lines(original, formatted)
 }
 
 #[cfg(test)]
@@ -139,11 +138,12 @@ mod tests {
                 },
             )
             .unwrap();
-        assert_eq!(result.has_diff, false);
+        assert!(!result.has_diff);
         assert_eq!(writer.len(), 0);
     }
 
     #[test]
+    #[allow(clippy::field_reassign_with_default)]
     fn prints_file_names_when_config_is_enabled() {
         let bin_file = "src/bin.rs";
         let bin_original = "fn main() {\nprintln!(\"Hello, world!\");\n}";
@@ -155,6 +155,7 @@ mod tests {
         let mut writer = Vec::new();
         let mut config = EmitterConfig::default();
         config.print_misformatted_file_names = true;
+
         let mut emitter = DiffEmitter::new(config);
         let _ = emitter
             .emit_formatted_file(

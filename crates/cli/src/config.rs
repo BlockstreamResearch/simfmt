@@ -25,10 +25,8 @@ fn get_toml_path(dir: &Path) -> Result<Option<PathBuf>, std::io::Error> {
         let config_file = dir.join(config_file_name);
         match fs::metadata(&config_file) {
             Ok(ref md) if md.is_file() => return Ok(Some(config_file.canonicalize()?)),
-            Err(e) => {
-                if !matches!(e.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) {
-                    return Err(e);
-                }
+            Err(e) if !matches!(e.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) => {
+                return Err(e);
             }
             _ => {}
         }
@@ -61,10 +59,10 @@ pub fn resolve_project_file(dir: &Path) -> Result<Option<PathBuf>, Error> {
         }
     }
 
-    if let Some(home) = home_dir() {
-        if let Some(path) = get_toml_path(&home)? {
-            return Ok(Some(path));
-        }
+    if let Some(home) = home_dir()
+        && let Some(path) = get_toml_path(&home)?
+    {
+        return Ok(Some(path));
     }
 
     if let Some(mut config) = config_dir() {

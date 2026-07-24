@@ -59,9 +59,8 @@ impl<'b, T: Write + 'b> Session<'b, T> {
         let format_result = format_project(input, &config, self);
         self.config.record_used_options(&config.used_options());
 
-        format_result.map(|report| {
+        format_result.inspect(|report| {
             self.errors.add(&report.internal.borrow().1);
-            report
         })
     }
 }

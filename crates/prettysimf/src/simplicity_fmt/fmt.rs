@@ -1,28 +1,26 @@
 use crate::config::InnerFmtConfig;
+use crate::error::ErrorKind;
 use crate::simplicity_fmt::core::Context;
 use crate::simplicity_fmt::doc::Doc;
 use simplicityhl::parse::ParsedSource;
 
-pub fn format_program(parsed: &ParsedSource<'_>, source: &str, config: &InnerFmtConfig) -> Result<String, String> {
+pub fn format_program(parsed: &ParsedSource<'_>, source: &str, config: &InnerFmtConfig) -> Result<String, ErrorKind> {
     let mut context = Context::new(config, source, parsed.tokens(), parsed.prefix().end);
 
     let doc = parsed
         .program()
         .to_doc(&mut context)
-        .ok_or("Failed to produce doc for program")?;
+        .ok_or(ErrorKind::FailedToBuildDocument)?;
 
     if let Some(trivia) = context.trivia.remaining_comments().next() {
-        return Err(format!(
-            "formatter did not attach comment at {}..{}",
-            trivia.span.start, trivia.span.end
-        ));
+        return Err(ErrorKind::LostComment(trivia.span.start..trivia.span.end));
     }
 
     let mut w = Vec::new();
     doc.render(config.line_width, &mut w)
-        .map_err(|e| format!("Failed to render doc: {}", e))?;
+        .map_err(|_| ErrorKind::FailedToRenderDocument)?;
 
-    let formatted = String::from_utf8(w).map_err(|e| format!("Failed to convert rendered doc to string: {}", e))?;
+    let formatted = String::from_utf8(w).map_err(ErrorKind::InvalidFormattedOutput)?;
     Ok(remove_whitespace_from_blank_lines(&formatted))
 }
 
@@ -52,7 +50,7 @@ mod tests {
     use simplicityhl::UnstableFeatures;
     use simplicityhl::parse::Program;
 
-    fn format(source: &str) -> String {
+    fn format_stable(source: &str) -> String {
         format_with_features(source, &UnstableFeatures::none())
     }
 
@@ -102,12 +100,12 @@ fn                         {}                 second()                  {}
         );
 
         // let formatted = dbg!(format(dbg!(&source)));
-        let formatted = format(&source);
+        let formatted = format_stable(&source);
 
         for comment in line_comment.iter().chain(block_comment.iter()) {
             assert!(formatted.contains(comment), "missing {comment}");
         }
-        assert_eq!(format(&formatted), formatted);
+        assert_eq!(format_stable(&formatted), formatted);
         Program::parse_for_formatting(0, &formatted, &UnstableFeatures::none()).expect("formatted source reparses");
     }
 
@@ -170,29 +168,29 @@ fn {} first() {} {{
             line_comment[5],
         );
 
-        let formatted = format(&source);
+        let formatted = format_stable(&source);
 
         for comment in line_comment.iter().chain(block_comment.iter()) {
             assert!(formatted.contains(comment), "missing {comment}");
         }
-        assert_eq!(format(&formatted), formatted);
+        assert_eq!(format_stable(&formatted), formatted);
         Program::parse_for_formatting(0, &formatted, &UnstableFeatures::none()).expect("formatted source reparses");
     }
 
     #[test]
     fn preserves_comment_only_files() {
         let source = "/* outer /* nested */ outer */\r\n// eof\r\n";
-        assert_eq!(format(source), source);
+        assert_eq!(format_stable(source), source);
     }
 
     #[test]
     fn preserves_simc_prefix_and_following_comments() {
         let source = "// header\nsimc \"*\";\n// body\nfn main() {}";
-        let formatted = format(source);
+        let formatted = format_stable(source);
 
         assert!(formatted.starts_with("// header\nsimc \"*\";"));
         assert!(formatted.contains("// body"));
-        assert_eq!(format(&formatted), formatted);
+        assert_eq!(format_stable(&formatted), formatted);
     }
 
     #[test]
@@ -228,7 +226,7 @@ fn main(value: Action) {
     #[test]
     fn preserves_blank_lines_between_comment_free_items() {
         let source = "fn one() {}\n\n\nfn two() {}";
-        let formatted = format(source);
+        let formatted = format_stable(source);
 
         assert_eq!(formatted, "fn one() {}\n\nfn two() {}");
     }
@@ -242,14 +240,14 @@ fn main(protocol_fee_vault_indexes: (u32, u32), protocol_fee_vault_array_indexes
 }
 "#;
 
-        let formatted = format(source);
+        let formatted = format_stable(source);
         assert!(formatted.contains(
             "let (\n        protocol_fee_vault_input_index,\n        protocol_fee_vault_output_index\n    ): (u32, u32) = protocol_fee_vault_indexes;"
         ));
         assert!(formatted.contains(
             "let [\n        protocol_fee_vault_input_index,\n        protocol_fee_vault_output_index\n    ]: [u32; 2] = protocol_fee_vault_array_indexes;"
         ));
-        assert_eq!(format(&formatted), formatted);
+        assert_eq!(format_stable(&formatted), formatted);
     }
 
     #[test]
@@ -263,7 +261,7 @@ fn main() {
 }
 "#;
 
-        assert_eq!(format(source), source);
+        assert_eq!(format_stable(source), source);
     }
 
     #[test]
@@ -291,9 +289,9 @@ fn main() {
 }
 "#;
 
-        let formatted = format(source);
+        let formatted = format_stable(source);
         assert_eq!(formatted, expected);
-        assert_eq!(format(&formatted), formatted);
+        assert_eq!(format_stable(&formatted), formatted);
     }
 
     #[test]

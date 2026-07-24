@@ -66,7 +66,7 @@ impl TriviaCursor {
             .filter_map(|(token, span)| match token {
                 FmtToken::Trivia(kind) => Some(Trivia {
                     kind: kind.clone(),
-                    span: span.clone(),
+                    span: *span,
                 }),
                 FmtToken::Token(_) => None,
             })

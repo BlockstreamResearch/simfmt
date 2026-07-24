@@ -99,6 +99,7 @@ struct GetOptsOptions {
 impl GetOptsOptions {
     const EMIT_MODES: [EmitMode; 2] = [EmitMode::Files, EmitMode::Stdout];
 
+    #[allow(clippy::field_reassign_with_default)]
     fn from_matches(matches: &Matches) -> anyhow::Result<GetOptsOptions> {
         let mut options = GetOptsOptions::default();
         options.verbose = matches.opt_present("verbose");
@@ -148,12 +149,12 @@ impl GetOptsOptions {
 
         options.print_misformatted_file_names = matches.opt_present("files-with-diff");
 
-        if let Some(ref emit_mode) = options.emit_mode {
-            if !GetOptsOptions::EMIT_MODES.contains(emit_mode) {
-                return Err(format_err!(
-                    "Invalid value for `--emit'. {emit_mode} isn't in an acceptable emit mode list.",
-                ));
-            }
+        if let Some(ref emit_mode) = options.emit_mode
+            && !GetOptsOptions::EMIT_MODES.contains(emit_mode)
+        {
+            return Err(format_err!(
+                "Invalid value for `--emit'. {emit_mode} isn't in an acceptable emit mode list.",
+            ));
         }
 
         Ok(options)
@@ -273,8 +274,10 @@ pub fn format_string(input: String, config: FmtConfig) -> anyhow::Result<i32> {
 
     let exit_code = if session.has_operational_errors()
         || session.has_parsing_errors()
+        || session.has_formatting_errors()
         || session.has_diff()
         || session.has_check_errors()
+        || session.has_unformatted_code_errors()
     {
         1
     } else {
@@ -290,8 +293,10 @@ fn format(files: Vec<PathBuf>, minimal_config_path: Option<String>, options: &Ge
     let mut minimal_config = PartialConfig::default();
     let mut has_operational_errors = false;
     let mut has_parsing_errors = false;
+    let mut has_formatting_errors = false;
     let mut has_diff = false;
     let mut has_check_errors = false;
+    let mut has_unformatted_code_errors = false;
 
     for file in files {
         if !file.exists() {
@@ -314,8 +319,10 @@ fn format(files: Vec<PathBuf>, minimal_config_path: Option<String>, options: &Ge
             minimal_config.merge_from(&session.config.used_options());
             has_operational_errors |= session.has_operational_errors();
             has_parsing_errors |= session.has_parsing_errors();
+            has_formatting_errors |= session.has_formatting_errors();
             has_diff |= session.has_diff();
             has_check_errors |= session.has_check_errors();
+            has_unformatted_code_errors |= session.has_unformatted_code_errors();
         }
     }
 
@@ -325,7 +332,13 @@ fn format(files: Vec<PathBuf>, minimal_config_path: Option<String>, options: &Ge
         file.write_all(toml.as_bytes())?;
     }
 
-    let exit_code = if has_operational_errors || has_parsing_errors || has_diff || has_check_errors {
+    let exit_code = if has_operational_errors
+        || has_parsing_errors
+        || has_formatting_errors
+        || has_diff
+        || has_check_errors
+        || has_unformatted_code_errors
+    {
         1
     } else {
         0
