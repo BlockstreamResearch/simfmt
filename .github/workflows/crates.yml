@@ -92,7 +92,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Run clippy checks
-        run: cargo clippy --workspace --all-targets --all-features
+        run: cargo --locked clippy --workspace --all-targets --all-features --keep-going -- -D warnings
         env:
           RUSTFLAGS: -Dwarnings
 
