@@ -69,6 +69,7 @@ impl TriviaCursor {
                     span: *span,
                 }),
                 FmtToken::Token(_) => None,
+                _ => unreachable!(),
             })
             .collect();
 

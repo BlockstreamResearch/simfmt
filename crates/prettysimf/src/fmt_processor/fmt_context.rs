@@ -4,7 +4,7 @@ use crate::fmt_processor::{FormatHandler, FormattingError};
 use crate::newline_style::apply_newline_style;
 use crate::reporter::FormatReport;
 use crate::utils::{FileName, Input};
-use simplicityhl::error::Diagnostic;
+use simplicityhl::error::{Diagnostic, DiagnosticManager};
 use simplicityhl::parse::{ParsedSource, Program};
 use std::sync::Arc;
 
@@ -37,8 +37,21 @@ impl RawFormatContext {
     }
 
     pub(crate) fn format_lines(&mut self, fmt_config: &InnerFmtConfig) -> Result<(), Vec<FormattingError>> {
-        let parsed = Program::parse_for_formatting(0, self.input_text.as_ref(), &simplicityhl::UnstableFeatures::all())
-            .map_err(|diagnostics| simplicity_err_to_fmt_err(diagnostics, self.input_text.as_ref()))?;
+        let mut diagnostics_manager = DiagnosticManager::default();
+        let parsed = Program::parse_with_errors_for_fmt(
+            0,
+            self.input_text.as_ref(),
+            &simplicityhl::UnstableFeatures::all(),
+            &mut diagnostics_manager,
+        );
+
+        if diagnostics_manager.has_errors() {
+            let errors = diagnostics_manager.diagnostics();
+            return Err(simplicity_err_to_fmt_err(errors, self.input_text.as_ref()));
+        }
+
+        let parsed =
+            parsed.ok_or_else(|| [FormattingError::from_error_kind(ErrorKind::ParseError, "Empty program")])?;
 
         let formatted = crate::simplicity_fmt::fmt::format_program(&parsed, self.input_text.as_ref(), fmt_config)
             .map_err(|error| vec![FormattingError::from_error_kind(error, self.input_text.as_ref())])?;
@@ -97,9 +110,9 @@ fn ensure_single_trailing_newline(newline_style: NewlineStyle, formatted_text: &
     apply_newline_style(newline_style, formatted_text, raw_input_text);
 }
 
-fn simplicity_err_to_fmt_err(simplicity_errs: Vec<Diagnostic>, source: &str) -> Vec<FormattingError> {
+fn simplicity_err_to_fmt_err(simplicity_errs: &[Diagnostic], source: &str) -> Vec<FormattingError> {
     simplicity_errs
-        .into_iter()
+        .iter()
         .map(|diagnostic| FormattingError::from_simplicity_err(diagnostic, source))
         .collect()
 }
@@ -136,10 +149,16 @@ mod tests {
     #[test]
     fn parser_errors_are_rendered_with_source_context() {
         let source = "// before one\n// before two\nfn main() {\n    match true {\n        false => () true => (),\n    }\n}\n// after one\n// after two\n";
-        let diagnostics = Program::parse_for_formatting(0, source, &simplicityhl::UnstableFeatures::none())
-            .expect_err("missing match-arm comma must not parse");
+        let mut diagnostics = DiagnosticManager::default();
+        let _program =
+            Program::parse_with_errors_for_fmt(0, source, &simplicityhl::UnstableFeatures::all(), &mut diagnostics);
+
+        assert!(diagnostics.has_errors(), "missing match-arm comma must not parse");
         let mut report = FormatReport::new();
-        report.append(FileName::Stdin, simplicity_err_to_fmt_err(diagnostics, source));
+        report.append(
+            FileName::Stdin,
+            simplicity_err_to_fmt_err(diagnostics.diagnostics(), source),
+        );
         report.add_parsing_error();
 
         let rendered = FormatReportFormatterBuilder::new(&report).build().to_string();

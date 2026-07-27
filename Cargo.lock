@@ -944,6 +944,7 @@ dependencies = [
 [[package]]
 name = "simplicityhl"
 version = "0.6.0"
+source = "git+https://github.com/ikripaka/SimplicityHL.git?branch=feat%2Ffmt-parser#7e4cf4d03afa15a24892e3d2d189f32db0659e34"
 dependencies = [
  "ariadne",
  "base64",

@@ -16,7 +16,8 @@ deprecated_in_future = "warn"
 multiple_crate_versions = "allow"
 
 [workspace.dependencies]
-simplicityhl = { path = "../SimplicityHL", features = ["fmt"] }
+# TODO: change dep on a real one
+simplicityhl = { git = "https://github.com/ikripaka/SimplicityHL.git", branch = "feat/fmt-parser", features = ["fmt"] }
 serde = { version = "1.0.228" }
 serde_json = { version = "1.0.150" }
 thiserror = { version = "2.0.18" }

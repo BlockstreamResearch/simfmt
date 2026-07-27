@@ -435,13 +435,18 @@ mod tests {
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    fn partial_config_from_args(args: &[&str]) -> PartialConfig {
+        let matches = make_opts().parse(args.iter().copied()).unwrap();
+        GetOptsOptions::from_matches(&matches).unwrap().to_partial_config()
+    }
+
     #[test]
     fn minimal_config_is_collected_after_formatting() {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system clock is before the Unix epoch")
             .as_nanos();
-        let directory = std::env::temp_dir().join(format!("simfmt-cli-test-{}-{timestamp}", std::process::id()));
+        let directory = env::temp_dir().join(format!("simfmt-cli-test-{}-{timestamp}", std::process::id()));
         fs::create_dir_all(&directory).unwrap();
 
         let source = directory.join("input.simf");
@@ -468,5 +473,57 @@ mod tests {
         assert!(!toml.contains("emit_mode"));
 
         fs::remove_dir_all(directory).unwrap();
+    }
+
+    #[test]
+    fn default_options_create_empty_partial_config() {
+        assert_eq!(partial_config_from_args(&[]), PartialConfig::default());
+    }
+
+    #[test]
+    fn cli_options_create_expected_partial_config() {
+        let actual = partial_config_from_args(&[
+            "--verbose",
+            "--emit",
+            "stdout",
+            "--color",
+            "auto",
+            "--files-with-diff",
+            "--config",
+            "indent_width=7,line_width=150,newline_style=Windows",
+        ]);
+        let expected = PartialConfig {
+            indent_width: Some(7),
+            line_width: Some(150),
+            verbose: Some(Verbosity::Verbose),
+            emit_mode: Some(EmitMode::Stdout),
+            newline_style: Some(prettysimf::config::NewlineStyle::Windows),
+            color: Some(Color::Auto),
+            print_misformatted_file_names: Some(true),
+        };
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn dedicated_flags_override_conflicting_inline_config() {
+        let actual = partial_config_from_args(&[
+            "--quiet",
+            "--check",
+            "--color",
+            "auto",
+            "--files-with-diff",
+            "--config",
+            "verbose=verbose,emit_mode=files,color=always,print_misformatted_file_names=false",
+        ]);
+        let expected = PartialConfig {
+            verbose: Some(Verbosity::Quiet),
+            emit_mode: Some(EmitMode::Diff),
+            color: Some(Color::Auto),
+            print_misformatted_file_names: Some(true),
+            ..PartialConfig::default()
+        };
+
+        assert_eq!(actual, expected);
     }
 }

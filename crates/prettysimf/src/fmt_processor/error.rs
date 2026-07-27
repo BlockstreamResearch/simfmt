@@ -17,7 +17,7 @@ impl FormattingError {
         start..end
     }
 
-    pub(crate) fn from_simplicity_err(simplicity_err: Diagnostic, source: &str) -> FormattingError {
+    pub(crate) fn from_simplicity_err(simplicity_err: &Diagnostic, source: &str) -> FormattingError {
         let span = match simplicity_err.location() {
             Location::Code(span) => Some(Self::clamped_span(source, span.start..span.end)),
             Location::File(_) | Location::Global => None,

@@ -150,25 +150,65 @@ pub fn load_config(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use prettysimf::config::{Color, NewlineStyle};
+    use prettysimf::utils::{EmitMode, Verbosity};
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    fn test_directory() -> PathBuf {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system clock is before the Unix epoch")
-            .as_nanos();
-        std::env::temp_dir().join(format!("simfmt-config-test-{}-{timestamp}", std::process::id()))
+    struct TestDirectory(PathBuf);
+
+    impl TestDirectory {
+        fn new() -> Self {
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system clock is before the Unix epoch")
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!("simfmt-config-test-{}-{timestamp}", std::process::id()));
+            fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn no_paths_or_overrides_use_default_config() {
+        let (config, path) = load_config(None, None, None).unwrap();
+
+        assert_eq!(path, None);
+        assert_eq!(
+            config.all_options(),
+            PartialConfig {
+                indent_width: Some(4),
+                line_width: Some(100),
+                verbose: Some(Verbosity::Quiet),
+                emit_mode: Some(EmitMode::Files),
+                newline_style: Some(NewlineStyle::Auto),
+                color: Some(Color::Auto),
+                print_misformatted_file_names: Some(false),
+            }
+        );
     }
 
     #[test]
     fn discovered_config_is_merged_before_cli_overrides() {
-        let directory = test_directory();
-        fs::create_dir_all(&directory).unwrap();
-        let input = directory.join("input.simf");
+        let directory = TestDirectory::new();
+        let nested = directory.path().join("nested");
+        let input_directory = nested.join("src");
+        fs::create_dir_all(&input_directory).unwrap();
+        let input = input_directory.join("input.simf");
         fs::write(&input, "").unwrap();
+        fs::write(directory.path().join("simfmt.toml"), "indent_width = 2\n").unwrap();
         fs::write(
-            directory.join("simfmt.toml"),
-            "indent_width = 2\nline_width = 80\nverbose = \"verbose\"\nemit_mode = \"stdout\"\nnewline_style = \"unix\"\n",
+            nested.join(".simfmt.toml"),
+            "indent_width = 6\nline_width = 80\nverbose = \"verbose\"\nemit_mode = \"stdout\"\nnewline_style = \"unix\"\n",
         )
         .unwrap();
 
@@ -178,31 +218,114 @@ mod tests {
         };
         let (config, path) = load_config(Some(&input), None, Some(cli)).unwrap();
 
-        assert_eq!(path, Some(directory.join("simfmt.toml").canonicalize().unwrap()));
-        assert_eq!(config.indent_width(), 2);
+        assert_eq!(path, Some(nested.join(".simfmt.toml").canonicalize().unwrap()));
+        assert_eq!(config.indent_width(), 6);
         assert_eq!(config.line_width(), 120);
-        assert_eq!(config.verbose(), prettysimf::utils::Verbosity::Verbose);
-        assert_eq!(config.emit_mode(), prettysimf::utils::EmitMode::Stdout);
-        assert_eq!(config.newline_style(), prettysimf::config::NewlineStyle::Unix);
+        assert_eq!(config.verbose(), Verbosity::Verbose);
+        assert_eq!(config.emit_mode(), EmitMode::Stdout);
+        assert_eq!(config.newline_style(), NewlineStyle::Unix);
+    }
 
-        fs::remove_dir_all(directory).unwrap();
+    #[test]
+    fn dotfile_takes_precedence_when_explicit_directory_contains_both_names() {
+        let directory = TestDirectory::new();
+        let project = directory.path().join("project");
+        let explicit_directory = directory.path().join("explicit");
+        fs::create_dir_all(&project).unwrap();
+        fs::create_dir_all(&explicit_directory).unwrap();
+        let input = project.join("input.simf");
+        let standard = explicit_directory.join("simfmt.toml");
+        let dotfile = explicit_directory.join(".simfmt.toml");
+        fs::write(&input, "").unwrap();
+        fs::write(project.join("simfmt.toml"), "indent_width = 4\n").unwrap();
+        fs::write(&standard, "indent_width = 2\n").unwrap();
+        fs::write(&dotfile, "indent_width = 8\n").unwrap();
+
+        let (config, path) = load_config(Some(&input), Some(&explicit_directory), None).unwrap();
+
+        assert_eq!(path, Some(dotfile.canonicalize().unwrap()));
+        assert_eq!(config.indent_width(), 8);
     }
 
     #[test]
     fn explicit_config_path_takes_precedence_over_discovery() {
-        let directory = test_directory();
-        fs::create_dir_all(&directory).unwrap();
-        let input = directory.join("input.simf");
-        let explicit = directory.join("custom-config.toml");
+        let directory = TestDirectory::new();
+        let input = directory.path().join("input.simf");
+        let explicit = directory.path().join("custom-config.toml");
         fs::write(&input, "").unwrap();
-        fs::write(directory.join("simfmt.toml"), "indent_width = 2\n").unwrap();
+        fs::write(directory.path().join("simfmt.toml"), "indent_width = 2\n").unwrap();
         fs::write(&explicit, "indent_width = 8\n").unwrap();
 
         let (config, path) = load_config(Some(&input), Some(&explicit), None).unwrap();
 
         assert_eq!(path, Some(explicit.canonicalize().unwrap()));
         assert_eq!(config.indent_width(), 8);
+    }
 
-        fs::remove_dir_all(directory).unwrap();
+    #[test]
+    fn unknown_options_are_ignored_while_known_options_load() {
+        let directory = TestDirectory::new();
+        let config_path = directory.path().join("custom.toml");
+        fs::write(&config_path, "line_width = 144\nfuture_option = true\n").unwrap();
+
+        let (config, path) = load_config(None, Some(&config_path), None).unwrap();
+
+        assert_eq!(path, Some(config_path.canonicalize().unwrap()));
+        assert_eq!(config.line_width(), 144);
+    }
+
+    #[test]
+    fn missing_explicit_path_returns_contextual_error() {
+        let directory = TestDirectory::new();
+        let missing = directory.path().join("missing.toml");
+
+        let error = load_config(None, Some(&missing), None).unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("Error: unable to find config file for the given path")
+        );
+        assert!(error.to_string().contains(&missing.display().to_string()));
+    }
+
+    #[test]
+    fn explicit_directory_without_known_config_returns_contextual_error() {
+        let directory = TestDirectory::new();
+        let empty = directory.path().join("empty");
+        fs::create_dir(&empty).unwrap();
+
+        let error = load_config(None, Some(&empty), None).unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("Error: unable to find a simfmt config file in")
+        );
+        assert!(error.to_string().contains(&empty.display().to_string()));
+    }
+
+    #[test]
+    fn malformed_toml_returns_parse_context() {
+        let directory = TestDirectory::new();
+        let config_path = directory.path().join("malformed.toml");
+        fs::write(&config_path, "indent_width = [").unwrap();
+
+        let error = load_config(None, Some(&config_path), None).unwrap_err();
+
+        assert!(error.to_string().contains("Failed to parse TOML in config file"));
+        assert!(error.to_string().contains(&config_path.display().to_string()));
+    }
+
+    #[test]
+    fn invalid_config_value_returns_value_context() {
+        let directory = TestDirectory::new();
+        let config_path = directory.path().join("invalid-value.toml");
+        fs::write(&config_path, "indent_width = \"wide\"\n").unwrap();
+
+        let error = load_config(None, Some(&config_path), None).unwrap_err();
+
+        assert!(error.to_string().contains("Failed to parse config values in"));
+        assert!(error.to_string().contains(&config_path.display().to_string()));
     }
 }
