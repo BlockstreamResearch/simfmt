@@ -160,7 +160,7 @@ impl GetOptsOptions {
         Ok(options)
     }
 
-    fn to_partial_config(&self) -> PartialConfig {
+    fn to_partial_config(&self) -> anyhow::Result<PartialConfig> {
         let mut config = PartialConfig::default();
         if self.verbose {
             config.verbose = Some(Verbosity::Verbose);
@@ -184,7 +184,23 @@ impl GetOptsOptions {
             let _ = config.override_value(key, val);
         }
 
-        config
+        let checked_config = self.check_config_validity(config)?;
+
+        Ok(checked_config)
+    }
+
+    fn check_config_validity(&self, config: PartialConfig) -> anyhow::Result<PartialConfig> {
+        if self.check
+            && let Some(emit_mode) = config.emit_mode
+            && EmitMode::Diff != emit_mode
+        {
+            return Err(anyhow::anyhow!(
+                "Provided incorrect config: emit mode cannot deviate from [{}], [{emit_mode}] in `--check` mode.",
+                EmitMode::Diff
+            ));
+        }
+
+        Ok(config)
     }
 
     pub(crate) fn config_path(&self) -> Option<&Path> {
@@ -233,7 +249,7 @@ pub fn execute(opts: &Options) -> anyhow::Result<i32> {
             let (config, _) = load_config(
                 Some(input_path),
                 options.config_path(),
-                Some(options.to_partial_config()),
+                Some(options.to_partial_config()?),
             )?;
             let toml = config.all_options().to_toml()?;
             io::stdout().write_all(toml.as_bytes())?;
@@ -244,7 +260,7 @@ pub fn execute(opts: &Options) -> anyhow::Result<i32> {
             let (mut config, _) = load_config(
                 Some(Path::new(".")),
                 options.config_path(),
-                Some(options.to_partial_config()),
+                Some(options.to_partial_config()?),
             )?;
 
             if options.check {
@@ -288,7 +304,7 @@ pub fn format_string(input: String, config: FmtConfig) -> anyhow::Result<i32> {
 
 fn format(files: Vec<PathBuf>, minimal_config_path: Option<String>, options: &GetOptsOptions) -> anyhow::Result<i32> {
     let out = &mut io::stdout();
-    let cli_config = options.to_partial_config();
+    let cli_config = options.to_partial_config()?;
     let explicit_config_path = options.config_path();
     let mut minimal_config = PartialConfig::default();
     let mut has_operational_errors = false;
@@ -435,9 +451,9 @@ mod tests {
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    fn partial_config_from_args(args: &[&str]) -> PartialConfig {
-        let matches = make_opts().parse(args.iter().copied()).unwrap();
-        GetOptsOptions::from_matches(&matches).unwrap().to_partial_config()
+    fn partial_config_from_args(args: &[&str]) -> anyhow::Result<PartialConfig> {
+        let matches = make_opts().parse(args.iter().copied())?;
+        GetOptsOptions::from_matches(&matches)?.to_partial_config()
     }
 
     #[test]
@@ -477,7 +493,7 @@ mod tests {
 
     #[test]
     fn default_options_create_empty_partial_config() {
-        assert_eq!(partial_config_from_args(&[]), PartialConfig::default());
+        assert_eq!(partial_config_from_args(&[]).unwrap(), PartialConfig::default());
     }
 
     #[test]
@@ -491,7 +507,8 @@ mod tests {
             "--files-with-diff",
             "--config",
             "indent_width=7,line_width=150,newline_style=Windows",
-        ]);
+        ])
+        .unwrap();
         let expected = PartialConfig {
             indent_width: Some(7),
             line_width: Some(150),
@@ -506,7 +523,7 @@ mod tests {
     }
 
     #[test]
-    fn dedicated_flags_override_conflicting_inline_config() {
+    fn dedicated_flags_override_with_error_conflicting_inline_config() {
         let actual = partial_config_from_args(&[
             "--quiet",
             "--check",
@@ -516,11 +533,29 @@ mod tests {
             "--config",
             "verbose=verbose,emit_mode=files,color=always,print_misformatted_file_names=false",
         ]);
+
+        // i.e. errors when we have `check` and `emit_mode=files`
+        assert!(actual.is_err());
+        assert!(actual.err().unwrap().to_string().contains("incorrect config"));
+    }
+
+    #[test]
+    fn dedicated_flags_override_conflicting_inline_config() {
+        let actual = partial_config_from_args(&[
+            "--quiet",
+            "--check",
+            "--color",
+            "auto",
+            "--files-with-diff",
+            "--config",
+            "verbose=verbose,emit_mode=diff,color=always,print_misformatted_file_names=false",
+        ])
+        .unwrap();
         let expected = PartialConfig {
-            verbose: Some(Verbosity::Quiet),
+            verbose: Some(Verbosity::Verbose),
             emit_mode: Some(EmitMode::Diff),
-            color: Some(Color::Auto),
-            print_misformatted_file_names: Some(true),
+            color: Some(Color::Always),
+            print_misformatted_file_names: Some(false),
             ..PartialConfig::default()
         };
 
