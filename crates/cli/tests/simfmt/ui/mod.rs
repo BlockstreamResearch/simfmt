@@ -2,17 +2,30 @@ use crate::simfmt;
 use std::fs;
 use std::path::Path;
 
-fn assert_fixture(input_file: &str, _target_file: &str) {
+fn assert_fixture(input_file: &str, target_file: &str) {
     let tests_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
     let input_path = tests_dir.join(input_file);
-    let input = fs::read_to_string(&input_path)
-        .unwrap_or_else(|error| panic!("failed to read {}: {error}", input_path.display()));
+    let target_path = tests_dir.join(target_file);
+    let expected = fs::read_to_string(&target_path)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", target_path.display()));
 
-    let (stdout, stderr) = simfmt(&[input.as_str(), "--check"]);
+    let (exit_status, stdout, stderr) = simfmt(&[
+        "--emit",
+        "stdout",
+        input_path.to_str().expect("fixture path must be valid UTF-8"),
+    ]);
 
     assert!(
-        !stderr.is_empty(),
+        exit_status.success(),
         "simfmt failed for {input_file}\nstdout:\n`{stdout}`\nstderr:\n{stderr}"
+    );
+    assert!(
+        stderr.is_empty(),
+        "simfmt wrote diagnostics for {input_file}:\n{stderr}"
+    );
+    assert_eq!(
+        stdout, expected,
+        "formatted output did not match, input file: `{input_path:?}`, `{target_file:?}`"
     );
 }
 

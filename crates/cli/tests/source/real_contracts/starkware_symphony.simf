@@ -671,7 +671,6 @@ fn test_fri_read_commitment() {
 type FibSquareProof = (u256, FibSquareEvals, List<FriLayer, 32>, FriLastLayer);
 
 
-type Eval = (u32, MerkleProof32)
 
 
 

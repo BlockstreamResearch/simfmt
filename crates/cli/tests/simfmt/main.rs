@@ -1,11 +1,11 @@
 use std::env;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, ExitStatus};
 
 #[path = "ui/mod.rs"]
 mod ui;
 
-fn simfmt_with_extra(args: &[&str], working_dir: Option<&str>, envs: &[(&str, &str)]) -> (String, String) {
+fn simfmt_with_extra(args: &[&str], working_dir: Option<&str>, envs: &[(&str, &str)]) -> (ExitStatus, String, String) {
     let simfmt = env!("CARGO_BIN_EXE_simfmt");
     let bin_dir = Path::new(simfmt).parent().unwrap();
 
@@ -21,6 +21,7 @@ fn simfmt_with_extra(args: &[&str], working_dir: Option<&str>, envs: &[(&str, &s
     }
     match cmd.output() {
         Ok(output) => (
+            output.status,
             String::from_utf8(output.stdout).expect("utf-8"),
             String::from_utf8(output.stderr).expect("utf-8"),
         ),
@@ -28,6 +29,6 @@ fn simfmt_with_extra(args: &[&str], working_dir: Option<&str>, envs: &[(&str, &s
     }
 }
 
-fn simfmt(args: &[&str]) -> (String, String) {
+fn simfmt(args: &[&str]) -> (ExitStatus, String, String) {
     simfmt_with_extra(args, None, &[])
 }
