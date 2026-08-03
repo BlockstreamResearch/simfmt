@@ -3,7 +3,7 @@ name = "simfmt"
 version = "0.0.1"
 description = "Formatting tool for SimplicityHL"
 repository = "https://github.com/ikripaka/simplefmt"
-readme = "../README.md"
+readme = "../../README.md"
 license.workspace = true
 edition.workspace = true
 
