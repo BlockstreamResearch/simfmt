@@ -56,4 +56,5 @@ ui_tests! {
     prediction_market: "source/real_contracts/prediction_market.simf" => "target/real_contracts/prediction_market.simf",
     starkware_symphony: "source/real_contracts/starkware_symphony.simf" => "target/real_contracts/starkware_symphony.simf",
     match_arm_blocks: "source/various/match_arm_blocks.simf" => "target/various/match_arm_blocks.simf",
+    omit_comas_in_tuples: "source/various/omit_comas_in_tuples.simf" => "target/various/omit_comas_in_tuples.simf",
 }
