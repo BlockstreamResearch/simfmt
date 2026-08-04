@@ -13,6 +13,10 @@ pub trait Doc {
     fn to_doc<'src>(&self, context: &mut Context<'_>) -> Option<RcDoc<'src>>;
 }
 
+fn type_doc<'src>(context: &mut Context<'_>, ty: &AliasedType, start: usize, end: usize) -> Option<RcDoc<'src>> {
+    context.exec_with_type_range(start, end, |context| ty.to_doc(context))
+}
+
 impl Doc for Program {
     fn to_doc<'src>(&self, context: &mut Context<'_>) -> Option<RcDoc<'src>> {
         let items: Vec<_> = self.items().iter().collect();
@@ -252,33 +256,31 @@ fn collect_match_expression_edits<'src>(
             .source
             .get(span.start..)
             .is_some_and(|source| source.starts_with('{'));
+        // TODO: refactor, we have weird behaviour when we're including comments here
+        let should_wrap = !is_block
+            && context
+                .source
+                .get(span.start..span.end)
+                .is_some_and(|source| source.contains('\n'));
 
-        if !is_block {
-            if is_empty_tuple(expression) {
-                edits.push(SourceEdit {
-                    start: span.start,
-                    end: span.end,
-                    replacement: "{}".to_owned(),
-                });
-            } else {
-                let arm_indent = context.indentation_at(span.start);
-                let effective_arm_indent = context.indent_from(arm_indent, inherited_indent_depth);
-                let body_indent = context.indent_from(&effective_arm_indent, 1);
-                indent_source_lines(context, span.start, span.end, edits);
-                edits.push(SourceEdit {
-                    start: span.start,
-                    end: span.start,
-                    replacement: format!("{{\n{body_indent}"),
-                });
-                edits.push(SourceEdit {
-                    start: span.end,
-                    end: span.end,
-                    replacement: format!("\n{effective_arm_indent}}}"),
-                });
-            }
+        if should_wrap {
+            let arm_indent = context.indentation_at(span.start);
+            let effective_arm_indent = context.indent_from(arm_indent, inherited_indent_depth);
+            let body_indent = context.indent_from(&effective_arm_indent, 1);
+            indent_source_lines(context, span.start, span.end, edits);
+            edits.push(SourceEdit {
+                start: span.start,
+                end: span.start,
+                replacement: format!("{{\n{body_indent}"),
+            });
+            edits.push(SourceEdit {
+                start: span.end,
+                end: span.end,
+                replacement: format!("\n{effective_arm_indent}}}"),
+            });
         }
 
-        let nested_indent = if !is_block && !is_empty_tuple(expression) {
+        let nested_indent = if should_wrap {
             inherited_indent_depth.saturating_add(1)
         } else {
             inherited_indent_depth
@@ -302,14 +304,6 @@ fn indent_source_lines(context: &CustomEditContext<'_>, start: usize, end: usize
             });
         }
     }
-}
-
-fn is_empty_tuple(expression: &Expression) -> bool {
-    matches!(
-        expression.inner(),
-        ExpressionInner::Single(single)
-            if matches!(single.inner(), SingleExpressionInner::Tuple(values) if values.is_empty())
-    )
 }
 
 fn gap_doc<'src>(context: &mut Context<'_>, start: usize, end: usize, between_items: bool) -> RcDoc<'src> {
@@ -364,8 +358,10 @@ impl Doc for Function {
                 .group()
         };
 
+        let signature_start = self.span().start;
+        let signature_end = self.body().span().start;
         let ret_doc = match self.ret() {
-            Some(ty) => RcDoc::text(" -> ").append(RcDoc::as_string(ty)),
+            Some(ty) => RcDoc::text(" -> ").append(type_doc(context, ty, signature_start, signature_end)?),
             None => RcDoc::nil(),
         };
 
@@ -382,11 +378,12 @@ impl Doc for Function {
 }
 
 impl Doc for FunctionParam {
-    fn to_doc<'src>(&self, _context: &mut Context<'_>) -> Option<RcDoc<'src>> {
+    fn to_doc<'src>(&self, context: &mut Context<'_>) -> Option<RcDoc<'src>> {
+        let span = self.span();
         Some(
             RcDoc::as_string(self.identifier())
                 .append(RcDoc::text(": "))
-                .append(RcDoc::as_string(self.ty())),
+                .append(type_doc(context, self.ty(), span.start, span.end)?),
         )
     }
 }
@@ -448,11 +445,12 @@ impl Doc for UseDecl {
 impl Doc for TypeAlias {
     fn to_doc<'src>(&self, context: &mut Context<'_>) -> Option<RcDoc<'src>> {
         let vis = self.visibility().to_doc(context)?;
+        let span = self.span();
         Some(
             vis.append(RcDoc::text("type "))
                 .append(RcDoc::as_string(self.name()))
                 .append(RcDoc::text(" = "))
-                .append(RcDoc::as_string(self.ty()))
+                .append(type_doc(context, self.ty(), span.start, span.end)?)
                 .append(RcDoc::text(";")),
         )
     }
@@ -492,7 +490,12 @@ impl Doc for EnumVariant {
             return Some(name);
         }
 
-        let payload: Option<Vec<_>> = self.payload().iter().map(|ty| ty.to_doc(context)).collect();
+        let span = self.span();
+        let payload: Option<Vec<_>> = self
+            .payload()
+            .iter()
+            .map(|ty| type_doc(context, ty, span.start, span.end))
+            .collect();
         Some(
             name.append(RcDoc::text("("))
                 .append(RcDoc::line_())
@@ -586,11 +589,12 @@ impl Doc for Statement {
 
 impl Doc for Assignment {
     fn to_doc<'src>(&self, context: &mut Context<'_>) -> Option<RcDoc<'src>> {
+        let span = self.span();
         Some(
             RcDoc::text("let ")
                 .append(self.pattern().to_doc(context)?)
                 .append(RcDoc::text(": "))
-                .append(self.ty().to_doc(context)?)
+                .append(type_doc(context, self.ty(), span.start, span.end)?)
                 .append(RcDoc::text(" = "))
                 .append(self.expression().to_doc(context)?)
                 .append(RcDoc::text(";"))
@@ -643,10 +647,7 @@ impl Doc for AliasedType {
             }
 
             let docs: Option<Vec<_>> = elements.iter().map(|element| element.to_doc(context)).collect();
-            let mut elements_doc = RcDoc::intersperse(docs?, RcDoc::text(",").append(RcDoc::line()));
-            if elements.len() == 1 {
-                elements_doc = elements_doc.append(RcDoc::text(","));
-            }
+            let elements_doc = RcDoc::intersperse(docs?, RcDoc::text(",").append(RcDoc::line()));
 
             return Some(
                 RcDoc::text("(")
@@ -658,12 +659,13 @@ impl Doc for AliasedType {
             );
         }
         if let Some((element, size)) = self.as_array() {
+            let size = context.original_type_decimal(size).unwrap_or_else(|| size.to_string());
             return Some(
                 RcDoc::text("[")
                     .append(RcDoc::line_())
                     .append(element.to_doc(context)?)
                     .append(RcDoc::text("; "))
-                    .append(RcDoc::as_string(size))
+                    .append(RcDoc::text(size))
                     .nest(context.config.indent_width as isize)
                     .append(RcDoc::line_())
                     .append(RcDoc::text("]"))
@@ -671,12 +673,15 @@ impl Doc for AliasedType {
             );
         }
         if let Some((element, bound)) = self.as_list() {
+            let bound = context
+                .original_type_decimal(bound.get())
+                .unwrap_or_else(|| bound.to_string());
             return Some(
                 RcDoc::text("List<")
                     .append(RcDoc::line_())
                     .append(element.to_doc(context)?)
                     .append(RcDoc::text(", "))
-                    .append(RcDoc::as_string(bound))
+                    .append(RcDoc::text(bound))
                     .nest(context.config.indent_width as isize)
                     .append(RcDoc::line_())
                     .append(RcDoc::text(">"))
@@ -857,14 +862,24 @@ impl Doc for Match {
     fn to_doc<'src>(&self, context: &mut Context<'_>) -> Option<RcDoc<'src>> {
         let scrutinee = self.scrutinee().to_doc(context)?;
 
-        let left_arm = self.left().to_doc(context)?;
-        let right_arm = self.right().to_doc(context)?;
+        let (left_arm, right_arm) = match self.left().pattern() {
+            MatchPattern::Left(_, _) => (self.left(), self.right()),
+            MatchPattern::Right(_, _) => (self.left(), self.right()),
+            MatchPattern::None => (self.right(), self.left()),
+            MatchPattern::Some(_, _) => (self.left(), self.right()),
+            MatchPattern::False => (self.right(), self.left()),
+            MatchPattern::True => (self.left(), self.right()),
+        };
+
+        let left_arm = left_arm.to_doc(context)?;
+        let right_arm = right_arm.to_doc(context)?;
 
         let body = RcDoc::text("{")
             .append(RcDoc::hardline())
             .append(left_arm.append(RcDoc::text(",")))
             .append(RcDoc::hardline())
-            .append(right_arm)
+            // TODO: maybe add trailing comas to a flag in config?
+            .append(right_arm.append(RcDoc::text(",")))
             .nest(context.config.indent_width as isize)
             .append(RcDoc::hardline())
             .append(RcDoc::text("}"));
@@ -885,11 +900,14 @@ impl Doc for EnumMatch {
         let arms = arms?;
 
         let body = if arms.is_empty() {
-            RcDoc::text("{}")
+            RcDoc::text("()")
         } else {
             RcDoc::text("{")
                 .append(RcDoc::hardline())
-                .append(RcDoc::intersperse(arms, RcDoc::text(",").append(RcDoc::hardline())))
+                .append(RcDoc::intersperse(
+                    arms.into_iter().map(|arm| arm.append(RcDoc::text(","))),
+                    RcDoc::hardline(),
+                ))
                 .nest(context.config.indent_width as isize)
                 .append(RcDoc::hardline())
                 .append(RcDoc::text("}"))
@@ -906,24 +924,25 @@ impl Doc for EnumMatch {
 
 impl Doc for MatchArm {
     fn to_doc<'src>(&self, context: &mut Context<'_>) -> Option<RcDoc<'src>> {
+        let span = self.span();
         let pat_doc = match self.pattern() {
             MatchPattern::Left(p, ty) => RcDoc::text("Left(")
                 .append(p.to_doc(context)?)
                 .append(RcDoc::text(": "))
-                .append(RcDoc::as_string(ty))
+                .append(type_doc(context, ty, span.start, span.end)?)
                 .append(RcDoc::text(")"))
                 .group(),
             MatchPattern::Right(p, ty) => RcDoc::text("Right(")
                 .append(p.to_doc(context)?)
                 .append(RcDoc::text(": "))
-                .append(RcDoc::as_string(ty))
+                .append(type_doc(context, ty, span.start, span.end)?)
                 .append(RcDoc::text(")"))
                 .group(),
             MatchPattern::None => RcDoc::text("None"),
             MatchPattern::Some(p, ty) => RcDoc::text("Some(")
                 .append(p.to_doc(context)?)
                 .append(RcDoc::text(": "))
-                .append(RcDoc::as_string(ty))
+                .append(type_doc(context, ty, span.start, span.end)?)
                 .append(RcDoc::text(")"))
                 .group(),
             MatchPattern::False => RcDoc::text("false"),
@@ -945,6 +964,7 @@ impl Doc for EnumMatchArm {
             .append(RcDoc::as_string(self.variant()));
 
         if !self.bindings().is_empty() {
+            let span = self.span();
             let bindings: Option<Vec<_>> = self
                 .bindings()
                 .iter()
@@ -953,7 +973,7 @@ impl Doc for EnumMatchArm {
                         pattern
                             .to_doc(context)?
                             .append(RcDoc::text(": "))
-                            .append(ty.to_doc(context)?),
+                            .append(type_doc(context, ty, span.start, span.end)?),
                     )
                 })
                 .collect();
@@ -975,19 +995,40 @@ impl Doc for EnumMatchArm {
 }
 
 fn match_arm_body<'src>(expression: &Expression, context: &mut Context<'_>) -> Option<RcDoc<'src>> {
+    let expression = inline_single_expression_block(expression, context);
     let expression_doc = expression.to_doc(context)?;
     match expression.inner() {
         ExpressionInner::Block(..) => Some(expression_doc),
         ExpressionInner::Single(single) if matches!(single.inner(), SingleExpressionInner::Tuple(values) if values.is_empty()) => {
-            Some(RcDoc::text("{}"))
+            Some(RcDoc::text("()"))
         }
-        ExpressionInner::Single(..) => Some(
-            RcDoc::text("{")
-                .append(RcDoc::hardline())
-                .append(expression_doc)
-                .nest(context.config.indent_width as isize)
-                .append(RcDoc::hardline())
-                .append(RcDoc::text("}")),
-        ),
+        ExpressionInner::Single(single) if is_match_expression(single) => Some(expression_doc),
+        ExpressionInner::Single(..) => Some(expression_doc.nest(context.config.indent_width as isize)),
     }
+}
+
+fn is_match_expression(expression: &SingleExpression) -> bool {
+    matches!(
+        expression.inner(),
+        SingleExpressionInner::Match(_) | SingleExpressionInner::EnumMatch(_)
+    )
+}
+
+fn inline_single_expression_block<'a>(mut expression: &'a Expression, context: &Context<'_>) -> &'a Expression {
+    while let ExpressionInner::Block(statements, Some(inner)) = expression.inner() {
+        let has_comment = context
+            .trivia
+            .has_comment_in(expression.span().start, expression.span().end);
+        let is_multiline = context
+            .source
+            .get(expression.span().start..expression.span().end)
+            .is_none_or(|source| source.contains('\n'));
+
+        if !statements.is_empty() || has_comment || is_multiline {
+            break;
+        }
+        expression = inner;
+    }
+
+    expression
 }

@@ -7,6 +7,6 @@ fn main() {
         },
         Right(x: Either<u32, Either<u128, u8>>) => {
             let either1: Either<u32, Either<u128, u8>> = x;
-        }
+        },
     }
 }

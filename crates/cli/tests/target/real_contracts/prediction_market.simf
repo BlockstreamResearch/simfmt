@@ -280,12 +280,8 @@ fn compute_market_id() -> u256 {
 fn verify_oracle_signature(outcome_yes: bool, signature: Signature) {
     let market_id: u256 = compute_market_id();
     let outcome_byte: u8 = match outcome_yes {
-        false => {
-            0
-        },
-        true => {
-            1
-        }
+        true => 1,
+        false => 0,
     };
     let ctx: Ctx8 = jet::sha_256_ctx_8_init();
     let ctx: Ctx8 = jet::sha_256_ctx_8_add_32(ctx, market_id);
@@ -426,12 +422,8 @@ fn oracle_resolve_primary_path(slot: u8, outcome_yes: bool, sig: Signature, yes_
     ensure_blinded_reissuance_burn_output(0, param::YES_REISSUANCE_TOKEN, yes_out_abf, yes_out_vbf);
 
     let new_collateral_hash: u256 = match outcome_yes {
-        false => {
-            resolved_no_collateral_script_hash()
-        },
-        true => {
-            resolved_yes_collateral_script_hash()
-        }
+        true => resolved_yes_collateral_script_hash(),
+        false => resolved_no_collateral_script_hash(),
     };
 
     let (coll_asset, coll_amount): (u256, u64) = get_input_explicit_asset_amount(2);
@@ -474,12 +466,8 @@ fn post_resolution_redemption_path(slot: u8, tokens_burned: u64) {
 
     let state_hash: u256 = script_hash_for_input_slot(slot);
     let winner_asset: u256 = match is_yes {
-        false => {
-            param::NO_TOKEN_ASSET
-        },
-        true => {
-            param::YES_TOKEN_ASSET
-        }
+        true => param::YES_TOKEN_ASSET,
+        false => param::NO_TOKEN_ASSET,
     };
 
     ensure_no_issuance(0);
@@ -493,12 +481,6 @@ fn post_resolution_redemption_path(slot: u8, tokens_burned: u64) {
     let is_partial: bool = not(jet::is_zero_64(remaining));
 
     match is_partial {
-        false => {
-            ensure_output_asset_with_amount_eq(0, winner_asset, tokens_burned);
-            ensure_output_is_burn(0);
-            let fee_idx: u32 = safe_subtract_32(num_outputs, 1);
-            ensure_fee_output(fee_idx);
-        },
         true => {
             ensure_output_asset_with_amount_eq(0, param::COLLATERAL_ASSET_ID, remaining);
             ensure_output_script_hash_eq(0, state_hash);
@@ -506,7 +488,13 @@ fn post_resolution_redemption_path(slot: u8, tokens_burned: u64) {
             ensure_output_is_burn(1);
             let fee_idx: u32 = safe_subtract_32(num_outputs, 1);
             ensure_fee_output(fee_idx);
-        }
+        },
+        false => {
+            ensure_output_asset_with_amount_eq(0, winner_asset, tokens_burned);
+            ensure_output_is_burn(0);
+            let fee_idx: u32 = safe_subtract_32(num_outputs, 1);
+            ensure_fee_output(fee_idx);
+        },
     };
 }
 
@@ -577,12 +565,6 @@ fn expiry_redemption_path(slot: u8, tokens_burned: u64, burn_asset: u256) {
     let is_partial: bool = not(jet::is_zero_64(remaining));
 
     match is_partial {
-        false => {
-            ensure_output_asset_with_amount_eq(0, burn_asset, tokens_burned);
-            ensure_output_is_burn(0);
-            let fee_idx: u32 = safe_subtract_32(num_outputs, 1);
-            ensure_fee_output(fee_idx);
-        },
         true => {
             ensure_output_asset_with_amount_eq(0, param::COLLATERAL_ASSET_ID, remaining);
             ensure_output_script_hash_eq(0, expired_hash);
@@ -590,7 +572,13 @@ fn expiry_redemption_path(slot: u8, tokens_burned: u64, burn_asset: u256) {
             ensure_output_is_burn(1);
             let fee_idx: u32 = safe_subtract_32(num_outputs, 1);
             ensure_fee_output(fee_idx);
-        }
+        },
+        false => {
+            ensure_output_asset_with_amount_eq(0, burn_asset, tokens_burned);
+            ensure_output_is_burn(0);
+            let fee_idx: u32 = safe_subtract_32(num_outputs, 1);
+            ensure_fee_output(fee_idx);
+        },
     };
 }
 
@@ -750,22 +738,14 @@ fn main() {
                     match l2 {
                         Left(l3: Path1or2) => {
                             match l3 {
-                                Left(u: ()) => {
-                                    initial_issuance_primary_path(slot, yes_bf, no_bf)
-                                },
-                                Right(u: ()) => {
-                                    initial_issuance_secondary_no_rt_path(slot, no_bf)
-                                },
+                                Left(u: ()) => initial_issuance_primary_path(slot, yes_bf, no_bf),
+                                Right(u: ()) => initial_issuance_secondary_no_rt_path(slot, no_bf),
                             }
                         },
                         Right(r3: Path3or4) => {
                             match r3 {
-                                Left(u: ()) => {
-                                    subsequent_issuance_primary_path(slot, yes_bf, no_bf)
-                                },
-                                Right(u: ()) => {
-                                    subsequent_issuance_secondary_no_rt_path(slot, no_bf)
-                                },
+                                Left(u: ()) => subsequent_issuance_primary_path(slot, yes_bf, no_bf),
+                                Right(u: ()) => subsequent_issuance_secondary_no_rt_path(slot, no_bf),
                             }
                         },
                     }
@@ -774,22 +754,14 @@ fn main() {
                     match r2 {
                         Left(l3: Path5or6) => {
                             match l3 {
-                                Left(u: ()) => {
-                                    subsequent_issuance_secondary_collateral_path(slot)
-                                },
-                                Right(u: ()) => {
-                                    oracle_resolve_primary_path(slot, oracle_outcome, oracle_sig, yes_bf)
-                                },
+                                Left(u: ()) => subsequent_issuance_secondary_collateral_path(slot),
+                                Right(u: ()) => oracle_resolve_primary_path(slot, oracle_outcome, oracle_sig, yes_bf),
                             }
                         },
                         Right(r3: Path7or8) => {
                             match r3 {
-                                Left(u: ()) => {
-                                    oracle_resolve_secondary_no_rt_path(slot, no_bf)
-                                },
-                                Right(u: ()) => {
-                                    oracle_resolve_secondary_collateral_path(slot)
-                                },
+                                Left(u: ()) => oracle_resolve_secondary_no_rt_path(slot, no_bf),
+                                Right(u: ()) => oracle_resolve_secondary_collateral_path(slot),
                             }
                         },
                     }
@@ -802,22 +774,14 @@ fn main() {
                     match l2 {
                         Left(l3: Path9or10) => {
                             match l3 {
-                                Left(u: ()) => {
-                                    post_resolution_redemption_path(slot, tokens_burned)
-                                },
-                                Right(u: ()) => {
-                                    expire_transition_primary_path(slot, yes_bf)
-                                },
+                                Left(u: ()) => post_resolution_redemption_path(slot, tokens_burned),
+                                Right(u: ()) => expire_transition_primary_path(slot, yes_bf),
                             }
                         },
                         Right(r3: Path11or12) => {
                             match r3 {
-                                Left(u: ()) => {
-                                    expire_transition_secondary_no_rt_path(slot, no_bf)
-                                },
-                                Right(u: ()) => {
-                                    expire_transition_secondary_collateral_path(slot)
-                                },
+                                Left(u: ()) => expire_transition_secondary_no_rt_path(slot, no_bf),
+                                Right(u: ()) => expire_transition_secondary_collateral_path(slot),
                             }
                         },
                     }
@@ -826,27 +790,17 @@ fn main() {
                     match r2 {
                         Left(l3: Path13or14) => {
                             match l3 {
-                                Left(u: ()) => {
-                                    expiry_redemption_path(slot, tokens_burned, burn_asset)
-                                },
-                                Right(u: ()) => {
-                                    cancellation_partial_path(slot, pairs_burned)
-                                },
+                                Left(u: ()) => expiry_redemption_path(slot, tokens_burned, burn_asset),
+                                Right(u: ()) => cancellation_partial_path(slot, pairs_burned),
                             }
                         },
                         Right(r3: Path15to17) => {
                             match r3 {
-                                Left(u: ()) => {
-                                    cancellation_full_primary_path(slot, pairs_burned, yes_bf, no_bf)
-                                },
+                                Left(u: ()) => cancellation_full_primary_path(slot, pairs_burned, yes_bf, no_bf),
                                 Right(r4: Path16or17) => {
                                     match r4 {
-                                        Left(u: ()) => {
-                                            cancellation_full_secondary_yes_rt_path(slot, yes_bf)
-                                        },
-                                        Right(u: ()) => {
-                                            cancellation_full_secondary_no_rt_path(slot, no_bf)
-                                        },
+                                        Left(u: ()) => cancellation_full_secondary_yes_rt_path(slot, yes_bf),
+                                        Right(u: ()) => cancellation_full_secondary_no_rt_path(slot, no_bf),
                                     }
                                 },
                             }

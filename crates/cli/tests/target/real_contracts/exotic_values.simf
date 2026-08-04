@@ -5,6 +5,6 @@ fn main() {
         },
         Right(x: List<u4, 4>) => {
             let list1: List<u4, 4> = x;
-        }
+        },
     }
 }

@@ -176,12 +176,8 @@ fn merkle_proof_step_fn(element: (u256, bool), acc: (u256, u32, u32)) -> (u256, 
     let (sibling, is_right): (u256, bool) = element;
     assert!(not(jet::le_32(depth, level)));
     let next_hash: u256 = match is_right {
-        false => {
-            lmsr_table_node_hash(current, sibling)
-        },
-        true => {
-            lmsr_table_node_hash(sibling, current)
-        }
+        true => lmsr_table_node_hash(sibling, current),
+        false => lmsr_table_node_hash(current, sibling),
     };
     let next_level: u32 = safe_add_32(level, 1);
     (next_hash, next_level, depth)
@@ -212,12 +208,8 @@ fn check_trade_direction(kind: u8, old_s: u64, new_s: u64) {
 
     let moves_up: bool = or(is_buy_yes, is_sell_no);
     match moves_up {
-        false => {
-            assert!(lt_64(new_s, old_s))
-        },
-        true => {
-            assert!(gt_64(new_s, old_s))
-        }
+        true => assert!(gt_64(new_s, old_s)),
+        false => assert!(lt_64(new_s, old_s)),
     };
 }
 
@@ -339,12 +331,8 @@ fn lmsr_primary_main(
     touch_primary_params();
 
     let path_tag: u8 = match path_primary {
-        Left(u: ()) => {
-            0
-        },
-        Right(u: ()) => {
-            1
-        },
+        Left(u: ()) => 0,
+        Right(u: ()) => 1,
     };
 
     let (scan_out_base, scan_rest): (u32, (u64, (u64, u8))) = scan_payload;
@@ -441,12 +429,8 @@ fn lmsr_primary_main(
             assert!(gt_64(delta_out, 0));
 
             let steps: u64 = match gt_64(new_s_index, old_s_index) {
-                true => {
-                    safe_subtract(new_s_index, old_s_index)
-                },
-                false => {
-                    safe_subtract(old_s_index, new_s_index)
-                },
+                true => safe_subtract(new_s_index, old_s_index),
+                false => safe_subtract(old_s_index, new_s_index),
             };
             let traded_lots: u64 = safe_multiply(steps, param::Q_STEP_LOTS);
             assert!(gt_64(traded_lots, 0));
@@ -464,23 +448,15 @@ fn lmsr_primary_main(
                 true => {
                     let d_up: u64 = safe_subtract(f_new, f_old);
                     match is_buy {
-                        true => {
-                            safe_add(l, d_up)
-                        },
-                        false => {
-                            safe_subtract(l, d_up)
-                        },
+                        true => safe_add(l, d_up),
+                        false => safe_subtract(l, d_up),
                     }
                 },
                 false => {
                     let d_down: u64 = safe_subtract(f_old, f_new);
                     match is_buy {
-                        true => {
-                            safe_subtract(l, d_down)
-                        },
-                        false => {
-                            safe_add(l, d_down)
-                        },
+                        true => safe_subtract(l, d_down),
+                        false => safe_add(l, d_down),
                     }
                 },
             };
@@ -581,20 +557,12 @@ fn lmsr_primary_main(
             assert!(jet::eq_1(<bool>::into(yes_increases), <bool>::into(no_increases)));
 
             let yes_delta_abs: u64 = match yes_increases {
-                true => {
-                    safe_subtract(out_yes_amount, in_yes_amount)
-                },
-                false => {
-                    safe_subtract(in_yes_amount, out_yes_amount)
-                },
+                true => safe_subtract(out_yes_amount, in_yes_amount),
+                false => safe_subtract(in_yes_amount, out_yes_amount),
             };
             let no_delta_abs: u64 = match no_increases {
-                true => {
-                    safe_subtract(out_no_amount, in_no_amount)
-                },
-                false => {
-                    safe_subtract(in_no_amount, out_no_amount)
-                },
+                true => safe_subtract(out_no_amount, in_no_amount),
+                false => safe_subtract(in_no_amount, out_no_amount),
             };
             assert!(jet::eq_64(yes_delta_abs, no_delta_abs));
         },
@@ -648,11 +616,7 @@ fn lmsr_secondary_main(in_base: u32) {
 
     // Own asset must match the slot role.
     match is_no_slot {
-        true => {
-            assert!(jet::eq_256(get_input_explicit_asset(ci), param::NO_ASSET_ID))
-        },
-        false => {
-            assert!(jet::eq_256(get_input_explicit_asset(ci), param::COLLATERAL_ASSET_ID))
-        },
+        true => assert!(jet::eq_256(get_input_explicit_asset(ci), param::NO_ASSET_ID)),
+        false => assert!(jet::eq_256(get_input_explicit_asset(ci), param::COLLATERAL_ASSET_ID)),
     };
 }
