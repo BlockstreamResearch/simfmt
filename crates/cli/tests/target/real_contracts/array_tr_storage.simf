@@ -6,10 +6,7 @@
  * This approach is particularly advantageous when updating all slots within every transaction.
  */
 
-fn hash_array_tr_storage(
-    elem: u256,
-    ctx: Ctx8
-) -> Ctx8 {
+fn hash_array_tr_storage(elem: u256, ctx: Ctx8) -> Ctx8 {
     jet::sha_256_ctx_8_add_32(ctx, elem)
 }
 
@@ -47,12 +44,8 @@ fn script_hash_for_input_script(state: [u256; 3], changed_index: Option<u16>) ->
     let ctx: Ctx8 = jet::tapdata_init();
 
     let (ctx, _, _): (Ctx8, u16, u16) = match changed_index {
-        Some(ind: u16) => {
-            array_fold::<hash_array_tr_storage_with_update, 3>(state, (ctx, 0, ind))
-        },
-        None => {
-            (array_fold::<hash_array_tr_storage, 3>(state, ctx), 0, 0)
-        }
+        Some(ind: u16) => array_fold::<hash_array_tr_storage_with_update, 3>(state, (ctx, 0, ind)),
+        None => (array_fold::<hash_array_tr_storage, 3>(state, ctx), 0, 0),
     };
 
     let computed: u256 = jet::sha_256_ctx_8_finalize(ctx);

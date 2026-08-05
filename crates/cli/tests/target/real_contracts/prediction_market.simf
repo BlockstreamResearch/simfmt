@@ -31,9 +31,7 @@ type BlindingQuad = (u256, u256, u256, u256);
 // Boolean helpers
 // ============================================================================
 
-fn not(
-    bit: bool
-) -> bool {
+fn not(bit: bool) -> bool {
     <u1>::into(jet::complement_1(<bool>::into(bit)))
 }
 
@@ -49,9 +47,7 @@ fn ensure_zero_bit(b: bool) {
 // Utility functions
 // ============================================================================
 
-fn get_input_script_hash(
-    index: u32
-) -> u256 {
+fn get_input_script_hash(index: u32) -> u256 {
     unwrap(jet::input_script_hash(index))
 }
 
@@ -238,10 +234,7 @@ fn ensure_primary_slot(expected_slot: u8) {
 // Arithmetic helpers
 // ============================================================================
 
-fn safe_multiply(
-    a: u64,
-    b: u64
-) -> u64 {
+fn safe_multiply(a: u64, b: u64) -> u64 {
     let result: u128 = jet::multiply_64(a, b);
     let (high, low): (u64, u64) = <u128>::into(result);
     assert!(jet::is_zero_64(high));
@@ -303,11 +296,7 @@ fn get_issuance_amount(index: u32) -> u64 {
 // Spending paths
 // ============================================================================
 
-fn initial_issuance_primary_path(
-    slot: u8,
-    yes_bf: BlindingQuad,
-    no_bf: BlindingQuad
-) {
+fn initial_issuance_primary_path(slot: u8, yes_bf: BlindingQuad, no_bf: BlindingQuad) {
     assert!(jet::eq_8(slot, 0));
     assert!(jet::eq_32(jet::current_index(), 0));
 
@@ -732,82 +721,52 @@ fn main() {
     let no_bf: BlindingQuad = (no_in_abf, no_in_vbf, no_out_abf, no_out_vbf);
 
     match witness::PATH {
-        Left(l: Path1to8) => {
-            match l {
-                Left(l2: Path1to4) => {
-                    match l2 {
-                        Left(l3: Path1or2) => {
-                            match l3 {
-                                Left(u: ()) => initial_issuance_primary_path(slot, yes_bf, no_bf),
-                                Right(u: ()) => initial_issuance_secondary_no_rt_path(slot, no_bf),
-                            }
-                        },
-                        Right(r3: Path3or4) => {
-                            match r3 {
-                                Left(u: ()) => subsequent_issuance_primary_path(slot, yes_bf, no_bf),
-                                Right(u: ()) => subsequent_issuance_secondary_no_rt_path(slot, no_bf),
-                            }
-                        },
-                    }
+        Left(l: Path1to8) => match l {
+            Left(l2: Path1to4) => match l2 {
+                Left(l3: Path1or2) => match l3 {
+                    Left(u: ()) => initial_issuance_primary_path(slot, yes_bf, no_bf),
+                    Right(u: ()) => initial_issuance_secondary_no_rt_path(slot, no_bf),
                 },
-                Right(r2: Path5to8) => {
-                    match r2 {
-                        Left(l3: Path5or6) => {
-                            match l3 {
-                                Left(u: ()) => subsequent_issuance_secondary_collateral_path(slot),
-                                Right(u: ()) => oracle_resolve_primary_path(slot, oracle_outcome, oracle_sig, yes_bf),
-                            }
-                        },
-                        Right(r3: Path7or8) => {
-                            match r3 {
-                                Left(u: ()) => oracle_resolve_secondary_no_rt_path(slot, no_bf),
-                                Right(u: ()) => oracle_resolve_secondary_collateral_path(slot),
-                            }
-                        },
-                    }
+                Right(r3: Path3or4) => match r3 {
+                    Left(u: ()) => subsequent_issuance_primary_path(slot, yes_bf, no_bf),
+                    Right(u: ()) => subsequent_issuance_secondary_no_rt_path(slot, no_bf),
                 },
-            }
+            },
+            Right(r2: Path5to8) => match r2 {
+                Left(l3: Path5or6) => match l3 {
+                    Left(u: ()) => subsequent_issuance_secondary_collateral_path(slot),
+                    Right(u: ()) => oracle_resolve_primary_path(slot, oracle_outcome, oracle_sig, yes_bf),
+                },
+                Right(r3: Path7or8) => match r3 {
+                    Left(u: ()) => oracle_resolve_secondary_no_rt_path(slot, no_bf),
+                    Right(u: ()) => oracle_resolve_secondary_collateral_path(slot),
+                },
+            },
         },
-        Right(r: Path9to17) => {
-            match r {
-                Left(l2: Path9to12) => {
-                    match l2 {
-                        Left(l3: Path9or10) => {
-                            match l3 {
-                                Left(u: ()) => post_resolution_redemption_path(slot, tokens_burned),
-                                Right(u: ()) => expire_transition_primary_path(slot, yes_bf),
-                            }
-                        },
-                        Right(r3: Path11or12) => {
-                            match r3 {
-                                Left(u: ()) => expire_transition_secondary_no_rt_path(slot, no_bf),
-                                Right(u: ()) => expire_transition_secondary_collateral_path(slot),
-                            }
-                        },
-                    }
+        Right(r: Path9to17) => match r {
+            Left(l2: Path9to12) => match l2 {
+                Left(l3: Path9or10) => match l3 {
+                    Left(u: ()) => post_resolution_redemption_path(slot, tokens_burned),
+                    Right(u: ()) => expire_transition_primary_path(slot, yes_bf),
                 },
-                Right(r2: Path13to17) => {
-                    match r2 {
-                        Left(l3: Path13or14) => {
-                            match l3 {
-                                Left(u: ()) => expiry_redemption_path(slot, tokens_burned, burn_asset),
-                                Right(u: ()) => cancellation_partial_path(slot, pairs_burned),
-                            }
-                        },
-                        Right(r3: Path15to17) => {
-                            match r3 {
-                                Left(u: ()) => cancellation_full_primary_path(slot, pairs_burned, yes_bf, no_bf),
-                                Right(r4: Path16or17) => {
-                                    match r4 {
-                                        Left(u: ()) => cancellation_full_secondary_yes_rt_path(slot, yes_bf),
-                                        Right(u: ()) => cancellation_full_secondary_no_rt_path(slot, no_bf),
-                                    }
-                                },
-                            }
-                        },
-                    }
+                Right(r3: Path11or12) => match r3 {
+                    Left(u: ()) => expire_transition_secondary_no_rt_path(slot, no_bf),
+                    Right(u: ()) => expire_transition_secondary_collateral_path(slot),
                 },
-            }
+            },
+            Right(r2: Path13to17) => match r2 {
+                Left(l3: Path13or14) => match l3 {
+                    Left(u: ()) => expiry_redemption_path(slot, tokens_burned, burn_asset),
+                    Right(u: ()) => cancellation_partial_path(slot, pairs_burned),
+                },
+                Right(r3: Path15to17) => match r3 {
+                    Left(u: ()) => cancellation_full_primary_path(slot, pairs_burned, yes_bf, no_bf),
+                    Right(r4: Path16or17) => match r4 {
+                        Left(u: ()) => cancellation_full_secondary_yes_rt_path(slot, yes_bf),
+                        Right(u: ()) => cancellation_full_secondary_no_rt_path(slot, no_bf),
+                    },
+                },
+            },
         },
     }
 }

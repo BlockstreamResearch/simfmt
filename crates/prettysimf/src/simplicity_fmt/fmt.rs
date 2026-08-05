@@ -80,9 +80,18 @@ mod tests {
         }
 
         fn assert_formatting(source: &str, expected: &str, features: &UnstableFeatures) {
-            let formatted = format_source_with(source, features);
+            assert_formatting_with_config(source, expected, features, &InnerFmtConfig::default());
+        }
+
+        fn assert_formatting_with_config(
+            source: &str,
+            expected: &str,
+            features: &UnstableFeatures,
+            config: &InnerFmtConfig,
+        ) {
+            let formatted = format_source_with_config(source, features, config);
             assert_eq!(formatted, expected);
-            assert_idempotent_with(expected, features);
+            assert_idempotent_with_config(expected, features, config);
         }
 
         pub(super) fn assert_formatting_stable(source: &str, expected: &str) {
@@ -98,6 +107,11 @@ mod tests {
             assert_formatting_unstable(source, expected);
         }
 
+        pub(super) fn assert_formatting_in_all_modes_with_config(source: &str, expected: &str, config: InnerFmtConfig) {
+            assert_formatting_with_config(source, expected, &UnstableFeatures::none(), &config);
+            assert_formatting_with_config(source, expected, &UnstableFeatures::all(), &config);
+        }
+
         fn parse_with<'src>(source: &'src str, features: &UnstableFeatures) -> ParsedSource<'src> {
             let mut diagnostics = DiagnosticManager::new();
             Program::parse_with_errors_for_fmt(TEST_FILE_ID, source, features, &mut diagnostics)
@@ -108,13 +122,17 @@ mod tests {
             format_source_with(source, &UnstableFeatures::none())
         }
 
-        pub(super) fn format_source_unstable(source: &str) -> String {
+        pub(super) fn _format_source_unstable(source: &str) -> String {
             format_source_with(source, &UnstableFeatures::all())
         }
 
         fn format_source_with(source: &str, features: &UnstableFeatures) -> String {
+            format_source_with_config(source, features, &InnerFmtConfig::default())
+        }
+
+        fn format_source_with_config(source: &str, features: &UnstableFeatures, config: &InnerFmtConfig) -> String {
             let parsed = parse_with(source, features);
-            format_program(&parsed, source, &InnerFmtConfig::default()).expect("source formats")
+            format_program(&parsed, source, config).expect("source formats")
         }
 
         pub(super) fn assert_idempotent_stable(formatted: &str) {
@@ -126,14 +144,18 @@ mod tests {
         }
 
         fn assert_idempotent_with(formatted: &str, features: &UnstableFeatures) {
-            assert_eq!(format_source_with(formatted, features), formatted);
+            assert_idempotent_with_config(formatted, features, &InnerFmtConfig::default());
+        }
+
+        fn assert_idempotent_with_config(formatted: &str, features: &UnstableFeatures, config: &InnerFmtConfig) {
+            assert_eq!(format_source_with_config(formatted, features, config), formatted);
         }
 
         pub(super) fn assert_comments_preserved<'a>(source: &str, comments: impl IntoIterator<Item = &'a str>) {
             let formatted = format_source_stable(source);
 
             for comment in comments {
-                assert!(formatted.contains(comment), "missing {comment}");
+                assert!(formatted.contains(comment), "missing {comment} in:\n{formatted}");
             }
             assert_idempotent_stable(&formatted);
             assert_idempotent_unstable(&formatted);
@@ -177,8 +199,9 @@ mod tests {
     #[test]
     fn preserves_comment_only_files() {
         let source = "/* outer /* nested */ outer */\r\n// eof\r\n";
-        assert_eq!(utils::format_source_stable(source), source);
-        assert_eq!(utils::format_source_unstable(source), source);
+        let expected = "/* outer /* nested */ outer */\n// eof\n";
+
+        utils::assert_formatting_in_all_modes(source, expected);
     }
 
     #[test]
@@ -190,6 +213,36 @@ mod tests {
         assert!(formatted.contains("// body"));
         utils::assert_idempotent_stable(&formatted);
         utils::assert_idempotent_unstable(&formatted);
+    }
+
+    #[test]
+    fn long_preserved_source_fragments_do_not_change_following_layout() {
+        let aliases = r#"// Binary LMSR Pool Covenant (Unified Source)
+// SimplicityHL contract for Liquid.
+//
+// This source defines both leaf entry functions:
+// - `lmsr_primary_main(...)`: swap/admin path with full state transition checks.
+// - `lmsr_secondary_main(...)`: NO/collateral co-membership path.
+//
+// `main` wrappers are appended per-leaf by Rust compilation code.
+
+type PathPrimary = Either<(), ()>;
+type ScanPayload = (u32, (u64, (u64, u8)));"#;
+        utils::assert_formatting_in_all_modes(aliases, aliases);
+
+        let commented_function = r#"fn preserved() -> bool {
+    // This deliberately long preserved comment keeps the whole function on the source-aware formatting path.
+    true
+}
+fn compact(bit: bool) -> bool {
+    bit
+}"#;
+        utils::assert_formatting_in_all_modes(commented_function, commented_function);
+
+        let prefixed = r#"// This deliberately long prefix must not consume the pretty-printer column budget for the following item.
+simc "*";
+type PathPrimary = Either<(), ()>;"#;
+        utils::assert_formatting_in_all_modes(prefixed, prefixed);
     }
 
     #[test]
@@ -288,17 +341,25 @@ fn main() {
     }
 
     #[test]
-    fn indents_inline_match_arms_inside_commented_functions() {
+    fn unwraps_single_expression_match_arms_inside_commented_functions() {
         let source = r#"
 fn main() {
     // Keep this function source-aware.
     match true {
-        false => false,
-        true => true,
+        false => {
+            false
+        },
+        true => {
+            true
+        },
     };
     match true {
-        true => true,
-        false => false,
+        true => {
+            true
+        },
+        false => {
+            false
+        }
     }
 }
 "#;
@@ -312,6 +373,82 @@ fn main() {
     match true {
         true => true,
         false => false,
+    }
+}
+"#;
+
+        utils::assert_formatting_in_all_modes(source, expected);
+    }
+
+    #[test]
+    fn keeps_fitting_function_calls_inline_after_unwrapping_nested_blocks() {
+        let source = "match flag{
+    true => {{{safe_subtract(out_no_amount, in_no_amount)}}},
+    false => {{safe_subtract(in_no_amount, out_no_amount)}},
+}";
+        let expected = "match flag {
+    true => safe_subtract(out_no_amount, in_no_amount),
+    false => safe_subtract(in_no_amount, out_no_amount),
+}";
+
+        utils::assert_formatting_with_wrapping_in_all_modes(source, expected);
+    }
+
+    #[test]
+    fn uses_blocks_when_match_arm_calls_need_multiple_lines() {
+        let source = "fn main(flag: bool) {
+    match flag {
+        true => calculate(first_argument, second_argument),
+        false => calculate(second_argument, first_argument),
+    }
+}";
+        let expected = "fn main(flag: bool) {
+    match flag {
+        true => {
+            calculate(
+                first_argument,
+                second_argument
+            )
+        },
+        false => {
+            calculate(
+                second_argument,
+                first_argument
+            )
+        },
+    }
+}";
+        let config = crate::config::InnerFmtConfig {
+            indent_width: 4,
+            line_width: 44,
+        };
+
+        utils::assert_formatting_in_all_modes_with_config(source, expected, config);
+    }
+
+    #[test]
+    fn unwraps_empty_tuples_and_nested_matches_inside_commented_functions() {
+        let source = r#"
+fn main() {
+    // Keep this function source-aware.
+    match true {
+        false => (),
+        true => match false {
+            true => true,
+            false => false,
+        },
+    }
+}
+"#;
+        let expected = r#"
+fn main() {
+    // Keep this function source-aware.
+    match true {
+        false => (),
+        true => match false {
+            true => true,
+            false => false,
+        },
     }
 }
 "#;
@@ -341,6 +478,35 @@ let singleton: (u8) = (1);";
     fn alias() {
         let source = "type Payload=Either<Option<[u8;10]>,List<(bool,u16),4>>;";
         let expected = "type Payload = Either<Option<[u8; 10]>, List<(bool, u16), 4>>;";
+
+        utils::assert_formatting_in_all_modes(source, expected);
+    }
+
+    #[test]
+    fn indents_the_first_element_of_a_wrapped_tuple_type() {
+        let source = "type Payload=(u32,(u64,u8));";
+        let expected = "type Payload = (\n    u32,\n    (u64, u8)\n);";
+        let config = crate::config::InnerFmtConfig {
+            indent_width: 4,
+            line_width: 24,
+        };
+
+        utils::assert_formatting_in_all_modes_with_config(source, expected, config);
+
+        let expected = "type Payload = (u32, (u64, u8));";
+        let config = crate::config::InnerFmtConfig {
+            indent_width: 4,
+            line_width: 100,
+        };
+
+        utils::assert_formatting_in_all_modes_with_config(source, expected, config);
+    }
+
+    #[test]
+    fn wraps_function_parameters_before_a_compact_return_type() {
+        let source =
+            "fn get_asset_issuance_issuance_factory_indexes(start_input_index:u32,start_output_index:u32)->(u32,u32){}";
+        let expected = "fn get_asset_issuance_issuance_factory_indexes(\n    start_input_index: u32,\n    start_output_index: u32\n) -> (u32, u32) {}";
 
         utils::assert_formatting_in_all_modes(source, expected);
     }

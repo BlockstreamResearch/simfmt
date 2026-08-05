@@ -9,9 +9,7 @@
 // Boolean helpers
 // ============================================================================
 
-fn not(
-    bit: bool
-) -> bool {
+fn not(bit: bool) -> bool {
     <u1>::into(jet::complement_1(<bool>::into(bit)))
 }
 
@@ -23,9 +21,7 @@ fn ensure_zero_bit(b: bool) {
 // Utility functions
 // ============================================================================
 
-fn get_input_script_hash(
-    index: u32
-) -> u256 {
+fn get_input_script_hash(index: u32) -> u256 {
     unwrap(jet::input_script_hash(index))
 }
 
@@ -35,9 +31,7 @@ fn get_output_script_hash(index: u32) -> u256 {
 
 // Note: jet::output_amount returns (Asset1, Amount1) — both asset and amount
 // in a single introspection call. This is an Elements/Simplicity jet convention.
-fn get_output_explicit_asset_amount(
-    index: u32
-) -> (u256, u64) {
+fn get_output_explicit_asset_amount(index: u32) -> (u256, u64) {
     let (asset, amount): (Asset1, Amount1) = unwrap(jet::output_amount(index));
     let asset_val: u256 = unwrap_right::<(u1, u256)>(asset);
     let amount_val: u64 = unwrap_right::<(u1, u256)>(amount);
@@ -45,9 +39,7 @@ fn get_output_explicit_asset_amount(
 }
 
 // Same convention: jet::input_amount returns (Asset1, Amount1).
-fn get_input_explicit_asset_amount(
-    index: u32
-) -> (u256, u64) {
+fn get_input_explicit_asset_amount(index: u32) -> (u256, u64) {
     let (asset, amount): (Asset1, Amount1) = unwrap(jet::input_amount(index));
     let asset_val: u256 = unwrap_right::<(u1, u256)>(asset);
     let amount_val: u64 = unwrap_right::<(u1, u256)>(amount);
@@ -58,10 +50,7 @@ fn get_input_explicit_asset_amount(
 // Arithmetic helpers
 // ============================================================================
 
-fn safe_multiply(
-    a: u64,
-    b: u64
-) -> u64 {
+fn safe_multiply(a: u64, b: u64) -> u64 {
     let result: u128 = jet::multiply_64(a, b);
     let (high, low): (u64, u64) = <u128>::into(result);
     assert!(jet::is_zero_64(high));
@@ -98,10 +87,7 @@ fn nums_key() -> u256 {
 // Cancel check
 // ============================================================================
 
-fn check_cancel(
-    i: u32,
-    sig: Signature
-) {
+fn check_cancel(i: u32, sig: Signature) {
     let ctx: Ctx8 = jet::sha_256_ctx_8_init();
     let (txid, vout): (u256, u32) = unwrap(jet::input_prev_outpoint(i));
     let ctx: Ctx8 = jet::sha_256_ctx_8_add_32(ctx, txid);

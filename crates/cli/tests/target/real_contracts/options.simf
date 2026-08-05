@@ -16,11 +16,7 @@
  */
 
 /// Assert: a == b * expected_q, via divmod
-fn divmod_eq(
-    a: u64,
-    b: u64,
-    expected_q: u64
-) {
+fn divmod_eq(a: u64, b: u64, expected_q: u64) {
     let (q, r): (u64, u64) = jet::div_mod_64(a, b);
     assert!(jet::eq_64(q, expected_q));
     assert!(jet::eq_64(r, 0));
@@ -411,7 +407,10 @@ fn expiry_path(grantor_token_amount_to_burn: u64, collateral_amount: u64, is_cha
 
 fn main() {
     match witness::PATH {
-        Left(left_or_right: Either<(u64, u256, u256, u256, u256, u256, u256, u256, u256), Either<(bool, u64, u64, u64), (bool, u64, u64)>>) => match left_or_right {
+        Left(left_or_right: Either<
+            (u64, u256, u256, u256, u256, u256, u256, u256, u256),
+            Either<(bool, u64, u64, u64), (bool, u64, u64)>
+        >) => match left_or_right {
             Left(params: (u64, u256, u256, u256, u256, u256, u256, u256, u256)) => {
                 let (
                     expected_asset_amount,
@@ -436,7 +435,10 @@ fn main() {
                     output_grantor_vbf
                 );
             },
-            Right(exercise_or_settlement: Either<(bool, u64, u64, u64), (bool, u64, u64)>) => match exercise_or_settlement {
+            Right(exercise_or_settlement: Either<
+                (bool, u64, u64, u64),
+                (bool, u64, u64)
+            >) => match exercise_or_settlement {
                 Left(params: (bool, u64, u64, u64)) => {
                     let (
                         is_change_needed,

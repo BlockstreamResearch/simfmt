@@ -17,11 +17,7 @@
  */
 
 /// Assert: a == b * expected_q, via divmod
-fn divmod_eq(
-    a: u64,
-    b: u64,
-    expected_q: u64
-) {
+fn divmod_eq(a: u64, b: u64, expected_q: u64) {
     let (q, r): (u64, u64) = jet::div_mod_64(a, b);
     assert!(jet::eq_64(q, expected_q));
     assert!(jet::eq_64(r, 0));
@@ -168,9 +164,7 @@ fn exercise_path(collateral_amount: u64, is_change_needed: bool) {
  *   Input[0]: Settlement asset from covenant
  *   Output[0]: Settlement asset → user (any address)
  */
-fn withdraw_path(
-    sig: Signature
-) {
+fn withdraw_path(sig: Signature) {
     assert!(jet::eq_32(jet::current_index(), 0));
 
     let (input_asset, input_amount): (u256, u64) = get_input_explicit_asset_amount(0);
@@ -195,9 +189,7 @@ fn withdraw_path(
  *   Output[0]: Collateral → user (any address)
  *   Output[1]: Premium → user (any address)
  */
-fn expiry_path(
-    sig: Signature
-) {
+fn expiry_path(sig: Signature) {
     jet::check_lock_time(param::EXPIRY_TIME);
 
     assert!(jet::le_32(jet::current_index(), 1));

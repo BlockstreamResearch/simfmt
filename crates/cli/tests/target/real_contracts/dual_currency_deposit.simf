@@ -30,10 +30,7 @@ fn checksig_priceblock(
 }
 
 // Signed <= using XOR with 0x8000.. bias: a<=b (signed) iff (a^bias) <= (b^bias) (unsigned)
-fn signed_le_u64(
-    a_bits: u64,
-    b_bits: u64
-) -> bool {
+fn signed_le_u64(a_bits: u64, b_bits: u64) -> bool {
     let bias: u64 = 0x8000000000000000;
     jet::le_64(jet::xor_64(a_bits, bias), jet::xor_64(b_bits, bias))
 }
@@ -51,11 +48,7 @@ fn divmod_eq(a: u64, b: u64, expected_q: u64) {
 }
 
 /// Assert: base_amount * basis_point_percentage == provided_amount * MAX_BASIS_POINTS
-fn constraint_percentage(
-    base_amount: u64,
-    basis_point_percentage: u64,
-    provided_amount: u64
-) {
+fn constraint_percentage(base_amount: u64, basis_point_percentage: u64, provided_amount: u64) {
     let MAX_BASIS_POINTS: u64 = 10000;
 
     let arg1: u256 = <(u128, u128)>::into(
@@ -568,72 +561,62 @@ fn main() {
     let merge_branch: Either<Either<(), ()>, ()> = witness::MERGE_BRANCH;
 
     match witness::PATH {
-        Left(funding_or_settlement: Either<Either<(u64, u64, u64, u64), (u64, u64, bool)>, (u64, Signature, u64, u64, bool)>) => {
-            match funding_or_settlement {
-                // Funding branches
-                Left(funding_params: Either<(u64, u64, u64, u64), (u64, u64, bool)>) => {
-                    match funding_params {
-                        // Maker funding: (principal_collateral_amount, principal_asset_amount, interest_collateral_amount, interest_asset_amount)
-                        Left(params: (u64, u64, u64, u64)) => {
-                            let (principal_collateral_amount, principal_asset_amount, interest_collateral_amount, interest_asset_amount): (u64, u64, u64, u64) = params;
-                            maker_funding_path(principal_collateral_amount, principal_asset_amount, interest_collateral_amount, interest_asset_amount)
-                        },
-                        // Taker funding: (collateral_amount_to_deposit, filler_token_amount_to_get, is_change_needed)
-                        Right(params: (u64, u64, bool)) => {
-                            let (collateral_amount_to_deposit, filler_token_amount_to_get, is_change_needed): (u64, u64, bool) = params;
-                            taker_funding_path(collateral_amount_to_deposit, filler_token_amount_to_get, is_change_needed)
-                        },
-                    }
+        Left(funding_or_settlement: Either<Either<(u64, u64, u64, u64), (u64, u64, bool)>, (u64, Signature, u64, u64, bool)>) => match funding_or_settlement {
+            // Funding branches
+            Left(funding_params: Either<(u64, u64, u64, u64), (u64, u64, bool)>) => match funding_params {
+                // Maker funding: (principal_collateral_amount, principal_asset_amount, interest_collateral_amount, interest_asset_amount)
+                Left(params: (u64, u64, u64, u64)) => {
+                    let (principal_collateral_amount, principal_asset_amount, interest_collateral_amount, interest_asset_amount): (u64, u64, u64, u64) = params;
+                    maker_funding_path(principal_collateral_amount, principal_asset_amount, interest_collateral_amount, interest_asset_amount)
                 },
-                // Settlement branches (oracle price attested)
-                Right(params: (u64, Signature, u64, u64, bool)) => {
-                    let (price_at_current_block_height, oracle_sig, amount_to_burn, amount_to_get, is_change_needed): (u64, Signature, u64, u64, bool) = params;
+                // Taker funding: (collateral_amount_to_deposit, filler_token_amount_to_get, is_change_needed)
+                Right(params: (u64, u64, bool)) => {
+                    let (collateral_amount_to_deposit, filler_token_amount_to_get, is_change_needed): (u64, u64, bool) = params;
+                    taker_funding_path(collateral_amount_to_deposit, filler_token_amount_to_get, is_change_needed)
+                },
+            },
+            // Settlement branches (oracle price attested)
+            Right(params: (u64, Signature, u64, u64, bool)) => {
+                let (price_at_current_block_height, oracle_sig, amount_to_burn, amount_to_get, is_change_needed): (u64, Signature, u64, u64, bool) = params;
 
-                    match token_branch {
-                        // Maker settlement: burn grantor token
-                        Left(u: ()) => maker_settlement_path(price_at_current_block_height, oracle_sig, amount_to_burn, amount_to_get, is_change_needed),
-                        // Taker settlement: burn filler token
-                        Right(u: ()) => taker_settlement_path(price_at_current_block_height, oracle_sig, amount_to_burn, amount_to_get, is_change_needed),
-                    }
-                },
-            }
+                match token_branch {
+                    // Maker settlement: burn grantor token
+                    Left(u: ()) => maker_settlement_path(price_at_current_block_height, oracle_sig, amount_to_burn, amount_to_get, is_change_needed),
+                    // Taker settlement: burn filler token
+                    Right(u: ()) => taker_settlement_path(price_at_current_block_height, oracle_sig, amount_to_burn, amount_to_get, is_change_needed),
+                }
+            },
         },
         // Termination flows (early termination or post-expiry) or Merge flows
-        Right(termination_or_maker_or_merge: Either<Either<(bool, u64, u64), (bool, u64, u64)>, ()>) => {
-            match termination_or_maker_or_merge {
-                Left(termination_or_maker: Either<(bool, u64, u64), (bool, u64, u64)>) => {
-                    match termination_or_maker {
-                        // Taker early termination: (is_change_needed, filler_token_amount_to_return, collateral_amount_to_get)
-                        Left(params: (bool, u64, u64)) => {
-                            let (is_change_needed, filler_token_amount_to_return, collateral_amount_to_get): (bool, u64, u64) = params;
-                            taker_early_termination_path(filler_token_amount_to_return, collateral_amount_to_get, is_change_needed)
-                        },
-                        // Maker termination (burn grantor token): choose collateral vs settlement token via token_branch
-                        Right(params: (bool, u64, u64)) => {
-                            let (is_change_needed, grantor_token_amount_to_burn, amount_to_get): (bool, u64, u64) = params;
+        Right(termination_or_maker_or_merge: Either<Either<(bool, u64, u64), (bool, u64, u64)>, ()>) => match termination_or_maker_or_merge {
+            Left(termination_or_maker: Either<(bool, u64, u64), (bool, u64, u64)>) => match termination_or_maker {
+                // Taker early termination: (is_change_needed, filler_token_amount_to_return, collateral_amount_to_get)
+                Left(params: (bool, u64, u64)) => {
+                    let (is_change_needed, filler_token_amount_to_return, collateral_amount_to_get): (bool, u64, u64) = params;
+                    taker_early_termination_path(filler_token_amount_to_return, collateral_amount_to_get, is_change_needed)
+                },
+                // Maker termination (burn grantor token): choose collateral vs settlement token via token_branch
+                Right(params: (bool, u64, u64)) => {
+                    let (is_change_needed, grantor_token_amount_to_burn, amount_to_get): (bool, u64, u64) = params;
 
-                            match token_branch {
-                                // Burn grantor collateral token -> receive collateral
-                                Left(u: ()) => maker_collateral_termination_path(grantor_token_amount_to_burn, amount_to_get, is_change_needed),
-                                // Burn grantor settlement token -> receive settlement asset
-                                Right(u: ()) => maker_settlement_termination_path(grantor_token_amount_to_burn, amount_to_get, is_change_needed),
-                            }
-                        },
+                    match token_branch {
+                        // Burn grantor collateral token -> receive collateral
+                        Left(u: ()) => maker_collateral_termination_path(grantor_token_amount_to_burn, amount_to_get, is_change_needed),
+                        // Burn grantor settlement token -> receive settlement asset
+                        Right(u: ()) => maker_settlement_termination_path(grantor_token_amount_to_burn, amount_to_get, is_change_needed),
                     }
                 },
-                Right(u: ()) => {
-                    // Merge tokens based on MERGE_BRANCH discriminator
-                    match merge_branch {
-                        Left(left_or_right: Either<(), ()>) => {
-                            match left_or_right {
-                                Left(u: ()) => merge_2_tokens(),
-                                Right(u: ()) => merge_3_tokens(),
-                            }
-                        },
-                        Right(u: ()) => merge_4_tokens(),
-                    }
-                },
-            }
+            },
+            Right(u: ()) => {
+                // Merge tokens based on MERGE_BRANCH discriminator
+                match merge_branch {
+                    Left(left_or_right: Either<(), ()>) => match left_or_right {
+                        Left(u: ()) => merge_2_tokens(),
+                        Right(u: ()) => merge_3_tokens(),
+                    },
+                    Right(u: ()) => merge_4_tokens(),
+                }
+            },
         },
     }
 

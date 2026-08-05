@@ -1,4 +1,4 @@
-use crate::simplicity_fmt::core::Context;
+use crate::simplicity_fmt::core::{Context, TriviaCursor};
 use either::Either;
 use pretty::RcDoc;
 use simplicityhl::parse::{
@@ -17,6 +17,25 @@ fn type_doc<'src>(context: &mut Context<'_>, ty: &AliasedType, start: usize, end
     context.exec_with_type_range(start, end, |context| ty.to_doc(context))
 }
 
+/// Converts source text into a document without embedding line breaks in `RcDoc::text`.
+///
+/// The `pretty` crate requires text nodes to contain no line breaks. Formatting emits
+/// canonical LF line endings; the outer formatting pipeline reapplies the configured
+/// newline style before emitting the result.
+fn source_doc<'src>(source: &str) -> RcDoc<'src> {
+    let mut doc = RcDoc::nil();
+    let mut remaining = source;
+
+    while let Some(newline) = remaining.find('\n') {
+        let (line, rest) = remaining.split_at(newline);
+        let line = line.strip_suffix('\r').unwrap_or(line);
+        doc = doc.append(RcDoc::text(line.to_owned())).append(RcDoc::hardline());
+        remaining = &rest[1..];
+    }
+
+    doc.append(RcDoc::text(remaining.to_owned()))
+}
+
 impl Doc for Program {
     fn to_doc<'src>(&self, context: &mut Context<'_>) -> Option<RcDoc<'src>> {
         let items: Vec<_> = self.items().iter().collect();
@@ -26,7 +45,7 @@ impl Doc for Program {
             .map(|span| span.start)
             .unwrap_or(context.source.len());
 
-        let mut doc = RcDoc::text(context.source.get(..context.prefix_end)?.to_owned());
+        let mut doc = source_doc(context.source.get(..context.prefix_end)?);
         doc = doc.append(gap_doc(context, context.prefix_end, first_start, false));
         let mut previous_end = first_start;
 
@@ -56,7 +75,7 @@ impl Doc for Item {
                 Item::Function(function) => format_commented_function(function, context)?,
                 _ => context.source.get(span.start..span.end)?.to_owned(),
             };
-            return Some(RcDoc::text(source));
+            return Some(source_doc(&source));
         }
 
         match self {
@@ -77,73 +96,22 @@ struct SourceEdit {
     replacement: String,
 }
 
-#[derive(Clone, Copy)]
-struct LineIndent {
-    start: usize,
-    end: usize,
-}
-
 struct CustomEditContext<'src> {
     source: &'src str,
-    line_indents: Vec<LineIndent>,
-    indent: String,
+    trivia: &'src TriviaCursor,
 }
 
 impl<'src> CustomEditContext<'src> {
-    fn new(source: &'src str, indent_width: usize) -> Self {
-        let mut line_indents = Vec::new();
-        let mut line_start = 0;
-
-        loop {
-            let line_end = source[line_start..]
-                .find('\n')
-                .map_or(source.len(), |offset| line_start + offset);
-            let indent_end = source[line_start..line_end]
-                .find(|character: char| !character.is_whitespace())
-                .map_or(line_end, |offset| line_start + offset);
-
-            line_indents.push(LineIndent {
-                start: line_start,
-                end: indent_end,
-            });
-
-            if line_end == source.len() {
-                break;
-            }
-            line_start = line_end + 1;
-        }
-
-        Self {
-            source,
-            line_indents,
-            indent: " ".repeat(indent_width),
-        }
-    }
-
-    fn indentation_at(&self, offset: usize) -> &'src str {
-        let index = match self.line_indents.binary_search_by_key(&offset, |line| line.start) {
-            Ok(index) => index,
-            Err(index) => index.saturating_sub(1),
-        };
-        let line = self.line_indents[index];
-        &self.source[line.start..line.end]
-    }
-
-    fn indent_from(&self, base: &str, inherited_depth: usize) -> String {
-        let mut indentation = String::with_capacity(base.len() + self.indent.len() * inherited_depth);
-        indentation.push_str(base);
-        for _ in 0..inherited_depth {
-            indentation.push_str(&self.indent);
-        }
-        indentation
+    fn new(source: &'src str, trivia: &'src TriviaCursor) -> Self {
+        Self { source, trivia }
     }
 }
 
 fn format_commented_function(function: &Function, context: &Context<'_>) -> Option<String> {
     let span = function.span();
     let mut edits = Vec::new();
-    let edit_context = CustomEditContext::new(context.source, context.config.indent_width);
-    collect_custom_edits(function.body(), &edit_context, 0, &mut edits);
+    let edit_context = CustomEditContext::new(context.source, &context.trivia);
+    collect_custom_edits(function.body(), &edit_context, &mut edits);
 
     let mut source = context.source.get(span.start..span.end)?.to_owned();
     edits.sort_by(|left, right| right.start.cmp(&left.start).then_with(|| right.end.cmp(&left.end)));
@@ -157,26 +125,21 @@ fn format_commented_function(function: &Function, context: &Context<'_>) -> Opti
     Some(source)
 }
 
-fn collect_custom_edits(
-    expression: &Expression,
-    context: &CustomEditContext<'_>,
-    inherited_indent_depth: usize,
-    edits: &mut Vec<SourceEdit>,
-) {
+fn collect_custom_edits(expression: &Expression, context: &CustomEditContext<'_>, edits: &mut Vec<SourceEdit>) {
     match expression.inner() {
         ExpressionInner::Block(statements, trailing_expression) => {
             for statement in statements.iter() {
                 match statement {
                     Statement::Assignment(assignment) => {
-                        collect_custom_edits(assignment.expression(), context, inherited_indent_depth, edits);
+                        collect_custom_edits(assignment.expression(), context, edits);
                     }
                     Statement::Expression(expression) => {
-                        collect_custom_edits(expression, context, inherited_indent_depth, edits);
+                        collect_custom_edits(expression, context, edits);
                     }
                 }
             }
             if let Some(expression) = trailing_expression {
-                collect_custom_edits(expression, context, inherited_indent_depth, edits);
+                collect_custom_edits(expression, context, edits);
             }
         }
         ExpressionInner::Single(single) => match single.inner() {
@@ -184,36 +147,35 @@ fn collect_custom_edits(
             | SingleExpressionInner::Either(Either::Right(expression))
             | SingleExpressionInner::Option(Some(expression))
             | SingleExpressionInner::Expression(expression) => {
-                collect_custom_edits(expression, context, inherited_indent_depth, edits);
+                collect_custom_edits(expression, context, edits);
             }
             SingleExpressionInner::Match(match_expression) => {
-                collect_custom_edits(match_expression.scrutinee(), context, inherited_indent_depth, edits);
-                collect_match_edits(match_expression, context, inherited_indent_depth, edits);
+                collect_custom_edits(match_expression.scrutinee(), context, edits);
+                collect_match_edits(match_expression, context, edits);
             }
             SingleExpressionInner::EnumMatch(match_expression) => {
-                collect_custom_edits(match_expression.scrutinee(), context, inherited_indent_depth, edits);
+                collect_custom_edits(match_expression.scrutinee(), context, edits);
                 collect_match_expression_edits(
                     match_expression.arms().iter().map(EnumMatchArm::expression),
                     context,
-                    inherited_indent_depth,
                     edits,
                 );
             }
             SingleExpressionInner::EnumConstruction(construction) => {
                 for expression in construction.args() {
-                    collect_custom_edits(expression, context, inherited_indent_depth, edits);
+                    collect_custom_edits(expression, context, edits);
                 }
             }
             SingleExpressionInner::Tuple(expressions)
             | SingleExpressionInner::Array(expressions)
             | SingleExpressionInner::List(expressions) => {
                 for expression in expressions.iter() {
-                    collect_custom_edits(expression, context, inherited_indent_depth, edits);
+                    collect_custom_edits(expression, context, edits);
                 }
             }
             SingleExpressionInner::Call(call) => {
                 for expression in call.args() {
-                    collect_custom_edits(expression, context, inherited_indent_depth, edits);
+                    collect_custom_edits(expression, context, edits);
                 }
             }
             SingleExpressionInner::Option(None)
@@ -228,18 +190,12 @@ fn collect_custom_edits(
     }
 }
 
-fn collect_match_edits(
-    match_expression: &Match,
-    context: &CustomEditContext<'_>,
-    inherited_indent_depth: usize,
-    edits: &mut Vec<SourceEdit>,
-) {
+fn collect_match_edits(match_expression: &Match, context: &CustomEditContext<'_>, edits: &mut Vec<SourceEdit>) {
     collect_match_expression_edits(
         [match_expression.left(), match_expression.right()]
             .into_iter()
             .map(MatchArm::expression),
         context,
-        inherited_indent_depth,
         edits,
     );
 }
@@ -247,62 +203,91 @@ fn collect_match_edits(
 fn collect_match_expression_edits<'src>(
     expressions: impl IntoIterator<Item = &'src Expression>,
     context: &CustomEditContext<'_>,
-    inherited_indent_depth: usize,
     edits: &mut Vec<SourceEdit>,
 ) {
     for expression in expressions {
-        let span = expression.span();
-        let is_block = context
-            .source
-            .get(span.start..)
-            .is_some_and(|source| source.starts_with('{'));
-        // TODO: refactor, we have weird behaviour when we're including comments here
-        let should_wrap = !is_block
-            && context
-                .source
-                .get(span.start..span.end)
-                .is_some_and(|source| source.contains('\n'));
+        let outer_span = expression.span();
+        let (expression, removed_block_depth) = redundant_match_arm_expression(expression, context);
+        let inner_span = expression.span();
 
-        if should_wrap {
-            let arm_indent = context.indentation_at(span.start);
-            let effective_arm_indent = context.indent_from(arm_indent, inherited_indent_depth);
-            let body_indent = context.indent_from(&effective_arm_indent, 1);
-            indent_source_lines(context, span.start, span.end, edits);
+        if removed_block_depth > 0 {
             edits.push(SourceEdit {
-                start: span.start,
-                end: span.start,
-                replacement: format!("{{\n{body_indent}"),
+                start: outer_span.start,
+                end: inner_span.start,
+                replacement: String::new(),
             });
             edits.push(SourceEdit {
-                start: span.end,
-                end: span.end,
-                replacement: format!("\n{effective_arm_indent}}}"),
+                start: inner_span.end,
+                end: outer_span.end,
+                replacement: String::new(),
             });
+            if !context
+                .source
+                .get(outer_span.end..)
+                .is_some_and(|source| source.trim_start().starts_with(','))
+            {
+                edits.push(SourceEdit {
+                    start: outer_span.end,
+                    end: outer_span.end,
+                    replacement: ",".to_owned(),
+                });
+            }
         }
 
-        let nested_indent = if should_wrap {
-            inherited_indent_depth.saturating_add(1)
-        } else {
-            inherited_indent_depth
-        };
-        collect_custom_edits(expression, context, nested_indent, edits);
+        collect_custom_edits(expression, context, edits);
     }
 }
 
-fn indent_source_lines(context: &CustomEditContext<'_>, start: usize, end: usize, edits: &mut Vec<SourceEdit>) {
-    let Some(expression) = context.source.get(start..end) else {
-        return;
-    };
+fn redundant_match_arm_expression<'a>(
+    mut expression: &'a Expression,
+    context: &CustomEditContext<'_>,
+) -> (&'a Expression, usize) {
+    let original = expression;
+    let mut removed_depth = 0;
 
-    for (offset, _) in expression.match_indices('\n') {
-        let line_start = start + offset + 1;
-        if line_start < end {
-            edits.push(SourceEdit {
-                start: line_start,
-                end: line_start,
-                replacement: context.indent.clone(),
+    while let ExpressionInner::Block(statements, Some(inner)) = expression.inner() {
+        let outer_span = expression.span();
+        let inner_span = inner.span();
+        let clean_prefix = context
+            .source
+            .get(outer_span.start..inner_span.start)
+            .is_some_and(|source| {
+                source
+                    .chars()
+                    .all(|character| character == '{' || character.is_whitespace())
             });
+        let clean_suffix = context
+            .source
+            .get(inner_span.end..outer_span.end)
+            .is_some_and(|source| {
+                source
+                    .chars()
+                    .all(|character| character == '}' || character.is_whitespace())
+            });
+
+        if !statements.is_empty()
+            || !clean_prefix
+            || !clean_suffix
+            || context
+                .trivia
+                .has_comment_in(expression.span().start, expression.span().end)
+        {
+            break;
         }
+
+        expression = inner;
+        removed_depth += 1;
+    }
+
+    let is_inline = context
+        .source
+        .get(expression.span().start..expression.span().end)
+        .is_some_and(|source| !source.contains('\n'));
+
+    if is_inline {
+        (expression, removed_depth)
+    } else {
+        (original, 0)
     }
 }
 
@@ -313,7 +298,7 @@ fn gap_doc<'src>(context: &mut Context<'_>, start: usize, end: usize, between_it
 
     let trivia = context.trivia.take_gap(start, end);
     if trivia.iter().any(|trivia| trivia.is_comment()) {
-        return RcDoc::text(context.source[start..end].to_owned());
+        return source_doc(&context.source[start..end]);
     }
 
     let newline_count = trivia.iter().filter(|trivia| trivia.is_newline()).count();
@@ -345,7 +330,12 @@ impl Doc for Function {
         let vis = self.visibility().to_doc(context)?;
         let name = RcDoc::as_string(self.name());
 
-        let params: Vec<_> = self.params().iter().filter_map(|p| p.to_doc(context)).collect();
+        let params: Option<Vec<_>> = self
+            .params()
+            .iter()
+            .map(|parameter| parameter.to_doc(context))
+            .collect();
+        let params = params?;
         let params_doc = if params.is_empty() {
             RcDoc::text("()")
         } else {
@@ -355,7 +345,7 @@ impl Doc for Function {
                 .nest(context.config.indent_width as isize)
                 .append(RcDoc::line_())
                 .append(RcDoc::text(")"))
-                .group()
+            // TODO: add group() function when return arguments are too long (firstly collapse arguments, later return values)
         };
 
         let signature_start = self.span().start;
@@ -373,7 +363,7 @@ impl Doc for Function {
 
         let body = self.body().to_doc(context)?;
 
-        Some(sig.append(RcDoc::space()).append(body))
+        Some(sig.group().append(RcDoc::space()).append(body))
     }
 }
 
@@ -651,8 +641,11 @@ impl Doc for AliasedType {
 
             return Some(
                 RcDoc::text("(")
-                    .append(RcDoc::line_())
-                    .append(elements_doc.nest(context.config.indent_width as isize))
+                    .append(
+                        RcDoc::line_()
+                            .append(elements_doc)
+                            .nest(context.config.indent_width as isize),
+                    )
                     .append(RcDoc::line_())
                     .append(RcDoc::text(")"))
                     .group(),
@@ -776,11 +769,11 @@ impl Doc for SingleExpression {
             SingleExpressionInner::EnumMatch(m) => m.to_doc(context),
             SingleExpressionInner::EnumConstruction(construction) => construction.to_doc(context),
             SingleExpressionInner::Tuple(exprs) => {
-                let docs: Vec<_> = exprs.iter().filter_map(|e| e.to_doc(context)).collect();
+                let docs: Option<Vec<_>> = exprs.iter().map(|expression| expression.to_doc(context)).collect();
                 Some(
                     RcDoc::text("(")
                         .append(RcDoc::line_())
-                        .append(RcDoc::intersperse(docs, RcDoc::text(",").append(RcDoc::line())))
+                        .append(RcDoc::intersperse(docs?, RcDoc::text(",").append(RcDoc::line())))
                         .nest(context.config.indent_width as isize)
                         .append(RcDoc::line_())
                         .append(RcDoc::text(")"))
@@ -788,11 +781,11 @@ impl Doc for SingleExpression {
                 )
             }
             SingleExpressionInner::Array(exprs) => {
-                let docs: Vec<_> = exprs.iter().filter_map(|e| e.to_doc(context)).collect();
+                let docs: Option<Vec<_>> = exprs.iter().map(|expression| expression.to_doc(context)).collect();
                 Some(
                     RcDoc::text("[")
                         .append(RcDoc::line_())
-                        .append(RcDoc::intersperse(docs, RcDoc::text(",").append(RcDoc::line())))
+                        .append(RcDoc::intersperse(docs?, RcDoc::text(",").append(RcDoc::line())))
                         .nest(context.config.indent_width as isize)
                         .append(RcDoc::line_())
                         .append(RcDoc::text("]"))
@@ -800,11 +793,11 @@ impl Doc for SingleExpression {
                 )
             }
             SingleExpressionInner::List(exprs) => {
-                let docs: Vec<_> = exprs.iter().filter_map(|e| e.to_doc(context)).collect();
+                let docs: Option<Vec<_>> = exprs.iter().map(|expression| expression.to_doc(context)).collect();
                 Some(
                     RcDoc::text("list![")
                         .append(RcDoc::line_())
-                        .append(RcDoc::intersperse(docs, RcDoc::text(",").append(RcDoc::line())))
+                        .append(RcDoc::intersperse(docs?, RcDoc::text(",").append(RcDoc::line())))
                         .nest(context.config.indent_width as isize)
                         .append(RcDoc::line_())
                         .append(RcDoc::text("]"))
@@ -818,7 +811,8 @@ impl Doc for SingleExpression {
 impl Doc for Call {
     fn to_doc<'src>(&self, context: &mut Context<'_>) -> Option<RcDoc<'src>> {
         let name_doc = RcDoc::as_string(self.name());
-        let args: Vec<_> = self.args().iter().filter_map(|a| a.to_doc(context)).collect();
+        let args: Option<Vec<_>> = self.args().iter().map(|argument| argument.to_doc(context)).collect();
+        let args = args?;
 
         let args_doc = if args.is_empty() {
             RcDoc::text("()")
@@ -897,21 +891,7 @@ impl Doc for EnumMatch {
     fn to_doc<'src>(&self, context: &mut Context<'_>) -> Option<RcDoc<'src>> {
         let scrutinee = self.scrutinee().to_doc(context)?;
         let arms: Option<Vec<_>> = self.arms().iter().map(|arm| arm.to_doc(context)).collect();
-        let arms = arms?;
-
-        let body = if arms.is_empty() {
-            RcDoc::text("()")
-        } else {
-            RcDoc::text("{")
-                .append(RcDoc::hardline())
-                .append(RcDoc::intersperse(
-                    arms.into_iter().map(|arm| arm.append(RcDoc::text(","))),
-                    RcDoc::hardline(),
-                ))
-                .nest(context.config.indent_width as isize)
-                .append(RcDoc::hardline())
-                .append(RcDoc::text("}"))
-        };
+        let body = enum_match_body(arms?, context.config.indent_width as isize);
 
         Some(
             RcDoc::text("match ")
@@ -919,6 +899,22 @@ impl Doc for EnumMatch {
                 .append(RcDoc::space())
                 .append(body),
         )
+    }
+}
+
+fn enum_match_body<'src>(arms: Vec<RcDoc<'src>>, indent_width: isize) -> RcDoc<'src> {
+    if arms.is_empty() {
+        RcDoc::text("{}")
+    } else {
+        RcDoc::text("{")
+            .append(RcDoc::hardline())
+            .append(RcDoc::intersperse(
+                arms.into_iter().map(|arm| arm.append(RcDoc::text(","))),
+                RcDoc::hardline(),
+            ))
+            .nest(indent_width)
+            .append(RcDoc::hardline())
+            .append(RcDoc::text("}"))
     }
 }
 
@@ -952,7 +948,8 @@ impl Doc for MatchArm {
         Some(
             pat_doc
                 .append(RcDoc::text(" => "))
-                .append(match_arm_body(self.expression(), context)?),
+                .append(match_arm_body(self.expression(), context)?)
+                .group(),
         )
     }
 }
@@ -989,7 +986,8 @@ impl Doc for EnumMatchArm {
 
         Some(
             head.append(RcDoc::text(" => "))
-                .append(match_arm_body(self.expression(), context)?),
+                .append(match_arm_body(self.expression(), context)?)
+                .group(),
         )
     }
 }
@@ -997,13 +995,19 @@ impl Doc for EnumMatchArm {
 fn match_arm_body<'src>(expression: &Expression, context: &mut Context<'_>) -> Option<RcDoc<'src>> {
     let expression = inline_single_expression_block(expression, context);
     let expression_doc = expression.to_doc(context)?;
+
     match expression.inner() {
         ExpressionInner::Block(..) => Some(expression_doc),
-        ExpressionInner::Single(single) if matches!(single.inner(), SingleExpressionInner::Tuple(values) if values.is_empty()) => {
-            Some(RcDoc::text("()"))
-        }
         ExpressionInner::Single(single) if is_match_expression(single) => Some(expression_doc),
-        ExpressionInner::Single(..) => Some(expression_doc.nest(context.config.indent_width as isize)),
+        ExpressionInner::Single(..) => Some(
+            RcDoc::text("{")
+                .append(RcDoc::hardline())
+                .append(expression_doc.clone())
+                .nest(context.config.indent_width as isize)
+                .append(RcDoc::hardline())
+                .append(RcDoc::text("}"))
+                .flat_alt(expression_doc),
+        ),
     }
 }
 
@@ -1019,12 +1023,8 @@ fn inline_single_expression_block<'a>(mut expression: &'a Expression, context: &
         let has_comment = context
             .trivia
             .has_comment_in(expression.span().start, expression.span().end);
-        let is_multiline = context
-            .source
-            .get(expression.span().start..expression.span().end)
-            .is_none_or(|source| source.contains('\n'));
 
-        if !statements.is_empty() || has_comment || is_multiline {
+        if !statements.is_empty() || has_comment {
             break;
         }
         expression = inner;

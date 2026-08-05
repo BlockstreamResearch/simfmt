@@ -189,7 +189,7 @@ fn merge_4_tokens() {
 
 /*
 * Maker funding path
-* Params: 
+* Params:
 *   1. FILLER_PER_SETTLEMENT_COLLATERAL
 *   2. FILLER_PER_SETTLEMENT_ASSET
 *   3. FILLER_PER_PRINCIPAL_COLLATERAL

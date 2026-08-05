@@ -14,9 +14,7 @@ type ScanPayload = (u32, (u64, (u64, u8)));
 // Boolean + arithmetic helpers
 // ============================================================================
 
-fn not(
-    bit: bool
-) -> bool {
+fn not(bit: bool) -> bool {
     <u1>::into(jet::complement_1(<bool>::into(bit)))
 }
 
@@ -87,9 +85,7 @@ fn ge_u128(a_high: u64, a_low: u64, b_high: u64, b_low: u64) -> bool {
 // Introspection helpers
 // ============================================================================
 
-fn get_input_script_hash(
-    index: u32
-) -> u256 {
+fn get_input_script_hash(index: u32) -> u256 {
     unwrap(jet::input_script_hash(index))
 }
 
