@@ -47,10 +47,12 @@ fn main() {
     let (state1, state2, state3, state4): (u64, u64, u64, u64) = <u256>::into(state_data);
 
     // Assert that the input is correct, i.e. "load".
-    assert!(jet::eq_256(
-        script_hash_for_input_script(state_data),
-        unwrap(jet::input_script_hash(jet::current_index()))
-    ));
+    assert!(
+        jet::eq_256(
+            script_hash_for_input_script(state_data),
+            unwrap(jet::input_script_hash(jet::current_index()))
+        )
+    );
 
     // Do a state update (and fail on 64-bit overflow even though we've got 192 other
     // bits we could be using..)
@@ -59,8 +61,10 @@ fn main() {
 
     let new_state: u256 = <(u64, u64, u64, u64)>::into((state1, state2, state3, new_state4));
     // Assert that the output is correct, i.e. "store".
-    assert!(jet::eq_256(
-        script_hash_for_input_script(new_state),
-        unwrap(jet::output_script_hash(jet::current_index()))
-    ));
+    assert!(
+        jet::eq_256(
+            script_hash_for_input_script(new_state),
+            unwrap(jet::output_script_hash(jet::current_index()))
+        )
+    );
 }

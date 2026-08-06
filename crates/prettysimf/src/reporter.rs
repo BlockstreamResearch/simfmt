@@ -115,7 +115,7 @@ fn error_kind_to_snippet_annotation_level(error_kind: &ErrorKind) -> Level<'_> {
     match error_kind {
         ErrorKind::IoError(_)
         | ErrorKind::ParseError
-        | ErrorKind::LostComment(_)
+        | ErrorKind::LostComment { .. }
         | ErrorKind::FailedToBuildDocument
         | ErrorKind::FailedToRenderDocument
         | ErrorKind::InvalidFormattedOutput(_) => Level::ERROR,
@@ -160,7 +160,7 @@ impl FormatReport {
             return;
         }
         for err in new_errors {
-            if let ErrorKind::LostComment(_) = err.kind {
+            if let ErrorKind::LostComment { .. } = err.kind {
                 errs.has_unformatted_code_errors = true;
             }
         }

@@ -10,6 +10,7 @@ pub struct Context<'a> {
     pub source: &'a str,
     pub prefix_end: usize,
     pub trivia: TriviaCursor,
+    pub syntax: SyntaxCursor,
     semicolons: Vec<Span>,
     decimal_literals: Vec<Span>,
     used_decimal_literals: Vec<bool>,
@@ -34,6 +35,7 @@ impl<'a> Context<'a> {
             source,
             prefix_end,
             trivia: TriviaCursor::from_tokens(tokens),
+            syntax: SyntaxCursor::from_tokens(tokens),
             semicolons: tokens
                 .iter()
                 .filter_map(|(token, span)| matches!(token, FmtToken::Token(Token::Semi)).then_some(*span))
@@ -106,8 +108,103 @@ impl Trivia {
         matches!(self.kind, TriviaKind::LineComment | TriviaKind::BlockComment)
     }
 
+    pub fn is_line_comment(&self) -> bool {
+        matches!(self.kind, TriviaKind::LineComment)
+    }
+
+    pub fn is_block_comment(&self) -> bool {
+        matches!(self.kind, TriviaKind::BlockComment)
+    }
+
     pub fn is_newline(&self) -> bool {
         matches!(self.kind, TriviaKind::Newline)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SyntaxKind {
+    Arrow,
+    Eq,
+    FatArrow,
+    Comma,
+    Semi,
+    LParen,
+    RParen,
+    LBracket,
+    RBracket,
+    LBrace,
+    RBrace,
+}
+
+impl SyntaxKind {
+    const COUNT: usize = 11;
+
+    const fn index(self) -> usize {
+        match self {
+            Self::Arrow => 0,
+            Self::Eq => 1,
+            Self::FatArrow => 2,
+            Self::Comma => 3,
+            Self::Semi => 4,
+            Self::LParen => 5,
+            Self::RParen => 6,
+            Self::LBracket => 7,
+            Self::RBracket => 8,
+            Self::LBrace => 9,
+            Self::RBrace => 10,
+        }
+    }
+}
+
+/// Punctuation spans from the same lossless token stream as formatter trivia.
+///
+/// These boundaries let document builders attach comments around delimiters
+/// without searching or editing raw source text.
+#[derive(Debug)]
+pub struct SyntaxCursor {
+    tokens: [Vec<Span>; SyntaxKind::COUNT],
+}
+
+impl SyntaxCursor {
+    pub fn from_tokens(tokens: &FmtTokens<'_>) -> Self {
+        let mut syntax_tokens = std::array::from_fn(|_| Vec::new());
+
+        for (token, span) in tokens {
+            let FmtToken::Token(token) = token else {
+                continue;
+            };
+            let kind = match token {
+                Token::Arrow => SyntaxKind::Arrow,
+                Token::Eq => SyntaxKind::Eq,
+                Token::FatArrow => SyntaxKind::FatArrow,
+                Token::Comma => SyntaxKind::Comma,
+                Token::Semi => SyntaxKind::Semi,
+                Token::LParen => SyntaxKind::LParen,
+                Token::RParen => SyntaxKind::RParen,
+                Token::LBracket => SyntaxKind::LBracket,
+                Token::RBracket => SyntaxKind::RBracket,
+                Token::LBrace => SyntaxKind::LBrace,
+                Token::RBrace => SyntaxKind::RBrace,
+                _ => continue,
+            };
+            syntax_tokens[kind.index()].push(*span);
+        }
+
+        Self { tokens: syntax_tokens }
+    }
+
+    pub fn first_in(&self, kind: SyntaxKind, start: usize, end: usize) -> Option<&Span> {
+        let spans = &self.tokens[kind.index()];
+        spans
+            .get(spans.partition_point(|span| span.start < start))
+            .filter(|span| span.end <= end)
+    }
+
+    pub fn last_in(&self, kind: SyntaxKind, start: usize, end: usize) -> Option<&Span> {
+        let spans = &self.tokens[kind.index()];
+        spans[..spans.partition_point(|span| span.end <= end)]
+            .last()
+            .filter(|span| span.start >= start)
     }
 }
 
@@ -173,10 +270,10 @@ impl TriviaCursor {
 
 #[cfg(test)]
 mod tests {
-    use super::{Context, Trivia, TriviaCursor};
+    use super::{Context, SyntaxCursor, SyntaxKind, Trivia, TriviaCursor};
     use crate::config::InnerFmtConfig;
     use simplicityhl::error::Span;
-    use simplicityhl::lexer::TriviaKind;
+    use simplicityhl::lexer::{FmtToken, Token, TriviaKind};
 
     fn span(start: usize, end: usize) -> Span {
         Span::new(0, start..end)
@@ -193,6 +290,7 @@ mod tests {
                 trivia: Vec::new(),
                 consumed: Vec::new(),
             },
+            syntax: SyntaxCursor::from_tokens(&Vec::new()),
             semicolons: vec![span(2, 3), span(10, 11), span(20, 21)],
             decimal_literals: Vec::new(),
             used_decimal_literals: Vec::new(),
@@ -201,6 +299,22 @@ mod tests {
 
         assert_eq!(context.semicolon_end_between(4, 15), Some(11));
         assert_eq!(context.semicolon_end_between(4, 10), None);
+    }
+
+    #[test]
+    fn finds_syntax_tokens_by_kind_and_source_range() {
+        let tokens = vec![
+            (FmtToken::Token(Token::LBrace), span(1, 2)),
+            (FmtToken::Token(Token::Comma), span(3, 4)),
+            (FmtToken::Token(Token::Comma), span(5, 6)),
+            (FmtToken::Token(Token::RBrace), span(7, 8)),
+        ];
+        let cursor = SyntaxCursor::from_tokens(&tokens);
+
+        assert_eq!(cursor.first_in(SyntaxKind::Comma, 2, 7), Some(&span(3, 4)));
+        assert_eq!(cursor.last_in(SyntaxKind::Comma, 2, 7), Some(&span(5, 6)));
+        assert_eq!(cursor.first_in(SyntaxKind::Comma, 4, 5), None);
+        assert_eq!(cursor.last_in(SyntaxKind::Comma, 6, 7), None);
     }
 
     #[test]

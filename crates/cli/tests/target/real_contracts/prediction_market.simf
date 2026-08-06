@@ -735,7 +735,9 @@ fn main() {
             Right(r2: Path5to8) => match r2 {
                 Left(l3: Path5or6) => match l3 {
                     Left(u: ()) => subsequent_issuance_secondary_collateral_path(slot),
-                    Right(u: ()) => oracle_resolve_primary_path(slot, oracle_outcome, oracle_sig, yes_bf),
+                    Right(u: ()) => {
+                        oracle_resolve_primary_path(slot, oracle_outcome, oracle_sig, yes_bf)
+                    },
                 },
                 Right(r3: Path7or8) => match r3 {
                     Left(u: ()) => oracle_resolve_secondary_no_rt_path(slot, no_bf),
@@ -760,7 +762,9 @@ fn main() {
                     Right(u: ()) => cancellation_partial_path(slot, pairs_burned),
                 },
                 Right(r3: Path15to17) => match r3 {
-                    Left(u: ()) => cancellation_full_primary_path(slot, pairs_burned, yes_bf, no_bf),
+                    Left(u: ()) => {
+                        cancellation_full_primary_path(slot, pairs_burned, yes_bf, no_bf)
+                    },
                     Right(r4: Path16or17) => match r4 {
                         Left(u: ()) => cancellation_full_secondary_yes_rt_path(slot, yes_bf),
                         Right(u: ()) => cancellation_full_secondary_no_rt_path(slot, no_bf),

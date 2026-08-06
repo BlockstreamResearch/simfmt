@@ -1,3 +1,6 @@
+#![warn(missing_docs)]
+#![warn(unreachable_pub)]
+
 pub mod config;
 mod core;
 pub mod emitter;

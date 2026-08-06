@@ -21,21 +21,15 @@ fn hash_array_tr_storage_with_update(elem: u256, triplet: (Ctx8, u16, u16)) -> (
             let (state1, state2, state3, state4): (u64, u64, u64, u64) = <u256>::into(elem);
             let new_state4: u64 = 20;
 
-            let new_state: u256 = <(u64, u64, u64, u64)>::into((state1, state2, state3, new_state4));
-            (
-                jet::sha_256_ctx_8_add_32(ctx, new_state),
-                val,
-                changed_index,
-            )
+            let new_state: u256 = <(u64, u64, u64, u64)>::into(
+                (state1, state2, state3, new_state4)
+            );
+            (jet::sha_256_ctx_8_add_32(ctx, new_state), val, changed_index)
         },
         false => {
             let (_, val): (bool, u16) = jet::increment_16(i);
-            (
-                jet::sha_256_ctx_8_add_32(ctx, elem),
-                val,
-                changed_index,
-            )
-        }
+            (jet::sha_256_ctx_8_add_32(ctx, elem), val, changed_index)
+        },
     }
 }
 
@@ -43,7 +37,11 @@ fn script_hash_for_input_script(state: [u256; 3], changed_index: Option<u16>) ->
     let tap_leaf: u256 = jet::tapleaf_hash();
     let ctx: Ctx8 = jet::tapdata_init();
 
-    let (ctx, _, _): (Ctx8, u16, u16) = match changed_index {
+    let (
+        ctx,
+        _,
+        _
+    ): (Ctx8, u16, u16) = match changed_index {
         Some(ind: u16) => array_fold::<hash_array_tr_storage_with_update, 3>(state, (ctx, 0, ind)),
         None => (array_fold::<hash_array_tr_storage, 3>(state, ctx), 0, 0),
     };
@@ -64,14 +62,18 @@ fn main() {
     let state: [u256; 3] = witness::STATE;
 
     // Assert that the input is correct, i.e. "load".
-    assert!(jet::eq_256(
-        script_hash_for_input_script(state, None),
-        unwrap(jet::input_script_hash(jet::current_index()))
-    ));
+    assert!(
+        jet::eq_256(
+            script_hash_for_input_script(state, None),
+            unwrap(jet::input_script_hash(jet::current_index()))
+        )
+    );
 
     // Assert that the output is correct, i.e. "store".
-    assert!(jet::eq_256(
-        script_hash_for_input_script(state, Some(witness::CHANGED_INDEX)),
-        unwrap(jet::output_script_hash(jet::current_index()))
-    ));
+    assert!(
+        jet::eq_256(
+            script_hash_for_input_script(state, Some(witness::CHANGED_INDEX)),
+            unwrap(jet::output_script_hash(jet::current_index()))
+        )
+    );
 }

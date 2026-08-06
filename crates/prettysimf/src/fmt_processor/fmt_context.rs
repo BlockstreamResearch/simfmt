@@ -177,12 +177,19 @@ mod tests {
         let report = FormatReport::new();
         report.append(
             FileName::Stdin,
-            vec![FormattingError::from_error_kind(ErrorKind::LostComment(0..17), source)],
+            vec![FormattingError::from_error_kind(
+                ErrorKind::LostComment {
+                    line: 1,
+                    start: 0,
+                    end: 17,
+                },
+                source,
+            )],
         );
 
         let rendered = FormatReportFormatterBuilder::new(&report).build().to_string();
 
-        assert!(rendered.contains("error: not formatted because a comment would be lost"));
+        assert!(rendered.contains("error: cannot format comment on line 1 at byte span 0..17"));
         assert!(rendered.contains("--> <stdin>:1:1"));
         assert!(rendered.contains("// missed comment"));
         assert!(!rendered.contains("internal"));

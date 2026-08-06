@@ -13,7 +13,16 @@ pub fn format_program(parsed: &ParsedSource<'_>, source: &str, config: &InnerFmt
         .ok_or(ErrorKind::FailedToBuildDocument)?;
 
     if let Some(trivia) = context.trivia.remaining_comments().next() {
-        return Err(ErrorKind::LostComment(trivia.span.start..trivia.span.end));
+        let line = source[..trivia.span.start]
+            .bytes()
+            .filter(|byte| *byte == b'\n')
+            .count()
+            + 1;
+        return Err(ErrorKind::LostComment {
+            line,
+            start: trivia.span.start,
+            end: trivia.span.end,
+        });
     }
 
     let mut w = Vec::new();
@@ -46,8 +55,11 @@ fn remove_whitespace_from_blank_lines(source: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use crate::error::ErrorKind;
+
     mod utils {
         use crate::config::InnerFmtConfig;
+        use crate::error::ErrorKind;
         use crate::simplicity_fmt::fmt::format_program;
         use simplicityhl::UnstableFeatures;
         use simplicityhl::error::DiagnosticManager;
@@ -122,6 +134,12 @@ mod tests {
             format_source_with(source, &UnstableFeatures::none())
         }
 
+        pub(super) fn format_error_stable(source: &str) -> ErrorKind {
+            let features = UnstableFeatures::none();
+            let parsed = parse_with(source, &features);
+            format_program(&parsed, source, &InnerFmtConfig::default()).expect_err("source should fail to format")
+        }
+
         pub(super) fn _format_source_unstable(source: &str) -> String {
             format_source_with(source, &UnstableFeatures::all())
         }
@@ -172,9 +190,9 @@ mod tests {
     #[test]
     fn preserves_comments_in_match() {
         let source = r#"fn main() {
-    match /* scrutinee */ witness::PATH {
+    match witness::PATH /* before match body */ {
         // before arm
-        Left(x: /* binding type */ u1) => {
+        Left(x: u1) => /* after arrow */ {
             /* body */ x
         },
         // between arms
@@ -186,14 +204,75 @@ mod tests {
         utils::assert_comments_preserved(
             source,
             [
-                "/* scrutinee */",
+                "/* before match body */",
                 "// before arm",
-                "/* binding type */",
+                "/* after arrow */",
                 "/* body */",
                 "// between arms",
                 "// after match",
             ],
         );
+    }
+
+    #[test]
+    fn comments_are_docs_while_surrounding_syntax_is_formatted() {
+        let source = r#"// leading
+fn   comments(a: u8, /* between parameters */ b: u8) /* before return arrow */ -> u8 {
+let x: u8 = /* after equals */ add(a, /* between arguments */ b); // after statement
+// before trailing expression
+list![x, /* between elements */ b,]
+}
+// eof
+"#;
+        let formatted = utils::format_source_stable(source);
+
+        for comment in [
+            "// leading",
+            "/* between parameters */",
+            "/* before return arrow */",
+            "/* after equals */",
+            "/* between arguments */",
+            "// after statement",
+            "// before trailing expression",
+            "/* between elements */",
+            "// eof",
+        ] {
+            assert!(formatted.contains(comment), "missing {comment} in:\n{formatted}");
+        }
+        assert!(formatted.contains("fn comments("));
+        assert!(formatted.contains("let x: u8 = /* after equals */ add("));
+        utils::assert_idempotent_stable(&formatted);
+        utils::assert_idempotent_unstable(&formatted);
+    }
+
+    #[test]
+    fn preserves_multiline_block_comments_as_indented_doc_lines() {
+        let source = "fn main() {\n    /* first line\n       second line */\n    ()\n}";
+        let formatted = utils::format_source_stable(source);
+
+        assert!(formatted.contains("    /* first line\n       second line */"));
+        utils::assert_idempotent_stable(&formatted);
+        utils::assert_idempotent_unstable(&formatted);
+    }
+
+    #[test]
+    fn reports_comments_inside_spanless_parameter_syntax() {
+        let source = "fn main(value /* no identifier/type boundary */: u8) {}";
+        let start = source.find("/*").unwrap();
+        let end = start + "/* no identifier/type boundary */".len();
+
+        match utils::format_error_stable(source) {
+            ErrorKind::LostComment {
+                line,
+                start: actual_start,
+                end: actual_end,
+            } => {
+                assert_eq!(line, 1);
+                assert_eq!(actual_start, start);
+                assert_eq!(actual_end, end);
+            }
+            other => panic!("expected unsupported comment, got {other:?}"),
+        }
     }
 
     #[test]
@@ -213,6 +292,30 @@ mod tests {
         assert!(formatted.contains("// body"));
         utils::assert_idempotent_stable(&formatted);
         utils::assert_idempotent_unstable(&formatted);
+    }
+
+    #[test]
+    fn removes_leading_newlines_without_a_preamble() {
+        let source = "\n \n\t\r\nfn main() {}";
+        let expected = "fn main() {}";
+
+        utils::assert_formatting_in_all_modes(source, expected);
+    }
+
+    #[test]
+    fn removes_leading_newlines_before_a_comment() {
+        let source = "\n\n  \n// header\nfn main() {}";
+        let expected = "// header\nfn main() {}";
+
+        utils::assert_formatting_in_all_modes(source, expected);
+    }
+
+    #[test]
+    fn trims_leading_newlines_and_shortens_the_simc_preamble_gap() {
+        let source = "\n\n simc \"*\";\n\n\nfn main() {}";
+        let expected = "simc \"*\";\n\nfn main() {}";
+
+        utils::assert_formatting_in_all_modes(source, expected);
     }
 
     #[test]
@@ -337,7 +440,15 @@ fn main() {
 }
 "#;
 
-        utils::assert_formatting_in_all_modes(source, source);
+        let expected = r#"fn main() {
+    let first: u32 = 1;
+    let second: u32 = 2;
+
+    let third: u32 = 3;
+}
+"#;
+
+        utils::assert_formatting_in_all_modes(source, expected);
     }
 
     #[test]
@@ -363,12 +474,11 @@ fn main() {
     }
 }
 "#;
-        let expected = r#"
-fn main() {
+        let expected = r#"fn main() {
     // Keep this function source-aware.
     match true {
-        false => false,
         true => true,
+        false => false,
     };
     match true {
         true => true,
@@ -440,15 +550,14 @@ fn main() {
     }
 }
 "#;
-        let expected = r#"
-fn main() {
+        let expected = r#"fn main() {
     // Keep this function source-aware.
     match true {
-        false => (),
         true => match false {
             true => true,
             false => false,
         },
+        false => (),
     }
 }
 "#;

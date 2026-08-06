@@ -128,28 +128,58 @@ fn exercise_path(collateral_amount: u64, is_change_needed: bool) {
 
     assert!(jet::eq_256(get_input_script_hash(1), expected_covenant_script_hash));
 
-    let premium_amount_u128: u128 = jet::multiply_64(collateral_amount, param::PREMIUM_PER_COLLATERAL);
+    let premium_amount_u128: u128 = jet::multiply_64(
+        collateral_amount,
+        param::PREMIUM_PER_COLLATERAL
+    );
     let (left_part, premium_amount): (u64, u64) = dbg!(<u128>::into(premium_amount_u128));
     assert!(jet::eq_64(left_part, 0));
 
     // Check collateral changes
-    ensure_correct_change_at_index(0, param::COLLATERAL_ASSET_ID, collateral_amount, expected_covenant_script_hash, is_change_needed);
-    ensure_correct_change_at_index(1, param::PREMIUM_ASSET_ID, premium_amount, expected_covenant_script_hash, is_change_needed);
+    ensure_correct_change_at_index(
+        0,
+        param::COLLATERAL_ASSET_ID,
+        collateral_amount,
+        expected_covenant_script_hash,
+        is_change_needed
+    );
+    ensure_correct_change_at_index(
+        1,
+        param::PREMIUM_ASSET_ID,
+        premium_amount,
+        expected_covenant_script_hash,
+        is_change_needed
+    );
 
-    let (settlement_output_index, collateral_output_index, premium_output_index): (u32, u32, u32) = match is_change_needed {
+    let (
+        settlement_output_index,
+        collateral_output_index,
+        premium_output_index
+    ): (u32, u32, u32) = match is_change_needed {
         true => (2, 3, 4),
         false => (0, 1, 2),
     };
 
     ensure_output_script_hash_eq(settlement_output_index, expected_covenant_script_hash);
 
-    let (output_asset, settlement_amount): (u256, u64) = get_output_explicit_asset_amount(settlement_output_index);
+    let (
+        output_asset,
+        settlement_amount
+    ): (u256, u64) = get_output_explicit_asset_amount(settlement_output_index);
     assert!(jet::eq_256(output_asset, param::SETTLEMENT_ASSET_ID));
 
     divmod_eq(settlement_amount, param::COLLATERAL_PER_CONTRACT, collateral_amount);
 
-    ensure_output_asset_with_amount_eq(collateral_output_index, param::COLLATERAL_ASSET_ID, collateral_amount);
-    ensure_output_asset_with_amount_eq(premium_output_index, param::PREMIUM_ASSET_ID, premium_amount);
+    ensure_output_asset_with_amount_eq(
+        collateral_output_index,
+        param::COLLATERAL_ASSET_ID,
+        collateral_amount
+    );
+    ensure_output_asset_with_amount_eq(
+        premium_output_index,
+        param::PREMIUM_ASSET_ID,
+        premium_amount
+    );
 }
 
 /*

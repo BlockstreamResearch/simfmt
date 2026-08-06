@@ -33,7 +33,7 @@ impl FormattingError {
 
     pub(crate) fn from_error_kind(kind: ErrorKind, source: &str) -> FormattingError {
         let span = match &kind {
-            ErrorKind::LostComment(span) => Some(Self::clamped_span(source, span.clone())),
+            ErrorKind::LostComment { start, end, .. } => Some(Self::clamped_span(source, *start..*end)),
             ErrorKind::IoError(_)
             | ErrorKind::ParseError
             | ErrorKind::FailedToBuildDocument

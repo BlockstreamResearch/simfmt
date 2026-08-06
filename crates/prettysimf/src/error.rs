@@ -1,5 +1,4 @@
 use std::io::Error as IoError;
-use std::ops::Range;
 use std::string::FromUtf8Error;
 use thiserror::Error;
 
@@ -11,9 +10,13 @@ pub enum ErrorKind {
     /// Parse error occurred when parsing the input.
     #[error("parse error")]
     ParseError,
-    /// If we had formatted the given node, then we would have lost a comment.
-    #[error("not formatted because a comment would be lost")]
-    LostComment(Range<usize>),
+    /// A comment could not be assigned to a formatting document because the
+    /// surrounding semantic syntax does not expose usable source spans.
+    #[error(
+        "cannot format comment on line {line} at byte span {start}..{end}: \
+         surrounding syntax has no usable source span"
+    )]
+    LostComment { line: usize, start: usize, end: usize },
     /// The formatter could not construct a document from valid syntax.
     #[error("formatter failed to construct a document")]
     FailedToBuildDocument,

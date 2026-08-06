@@ -351,15 +351,19 @@ fn lmsr_primary_main(
     // Merkle proof checks: (OLD_S_INDEX, F_OLD) and (NEW_S_INDEX, F_NEW)
     // must both open under the script-committed LMSR_TABLE_ROOT.
     let old_leaf: u256 = lmsr_table_leaf_hash(old_s_index, f_old);
-    let old_acc: (u256, u32, u32) =
-        fold::<merkle_proof_step_fn, 64>(old_proof, (old_leaf, 0, param::TABLE_DEPTH));
+    let old_acc: (u256, u32, u32) = fold::<merkle_proof_step_fn, 64>(
+        old_proof,
+        (old_leaf, 0, param::TABLE_DEPTH)
+    );
     let (old_root, old_levels, _): (u256, u32, u32) = old_acc;
     assert!(jet::eq_32(old_levels, param::TABLE_DEPTH));
     assert!(jet::eq_256(old_root, param::LMSR_TABLE_ROOT));
 
     let new_leaf: u256 = lmsr_table_leaf_hash(new_s_index, f_new);
-    let new_acc: (u256, u32, u32) =
-        fold::<merkle_proof_step_fn, 64>(new_proof, (new_leaf, 0, param::TABLE_DEPTH));
+    let new_acc: (u256, u32, u32) = fold::<merkle_proof_step_fn, 64>(
+        new_proof,
+        (new_leaf, 0, param::TABLE_DEPTH)
+    );
     let (new_root, new_levels, _): (u256, u32, u32) = new_acc;
     assert!(jet::eq_32(new_levels, param::TABLE_DEPTH));
     assert!(jet::eq_256(new_root, param::LMSR_TABLE_ROOT));
@@ -463,7 +467,10 @@ fn lmsr_primary_main(
             match is_buy {
                 true => {
                     let (lhs_high, lhs_low): (u64, u64) = multiply_64_wide(delta_in, fee_c);
-                    let (rhs_high, rhs_low): (u64, u64) = multiply_64_wide(base_notional, fee_denom);
+                    let (
+                        rhs_high,
+                        rhs_low
+                    ): (u64, u64) = multiply_64_wide(base_notional, fee_denom);
                     assert!(ge_u128(lhs_high, lhs_low, rhs_high, rhs_low));
                 },
                 false => {
@@ -478,45 +485,51 @@ fn lmsr_primary_main(
                     assert!(jet::eq_64(delta_out, traded_lots));
                     assert!(jet::eq_64(safe_add(out_yes_amount, delta_out), in_yes_amount));
                     assert!(jet::eq_64(out_no_amount, in_no_amount));
-                    assert!(jet::eq_64(
-                        safe_add(in_collateral_amount, delta_in),
-                        out_collateral_amount
-                    ));
+                    assert!(
+                        jet::eq_64(safe_add(in_collateral_amount, delta_in), out_collateral_amount)
+                    );
                 },
                 false => {
                     match is_sell_yes {
                         true => {
                             assert!(jet::eq_64(delta_in, traded_lots));
-                            assert!(jet::eq_64(
-                                safe_add(in_yes_amount, delta_in),
-                                out_yes_amount
-                            ));
+                            assert!(jet::eq_64(safe_add(in_yes_amount, delta_in), out_yes_amount));
                             assert!(jet::eq_64(out_no_amount, in_no_amount));
-                            assert!(jet::eq_64(
-                                safe_add(out_collateral_amount, delta_out),
-                                in_collateral_amount
-                            ));
+                            assert!(
+                                jet::eq_64(
+                                    safe_add(out_collateral_amount, delta_out),
+                                    in_collateral_amount
+                                )
+                            );
                         },
                         false => {
                             match is_buy_no {
                                 true => {
                                     assert!(jet::eq_64(delta_out, traded_lots));
-                                    assert!(jet::eq_64(safe_add(out_no_amount, delta_out), in_no_amount));
+                                    assert!(
+                                        jet::eq_64(safe_add(out_no_amount, delta_out), in_no_amount)
+                                    );
                                     assert!(jet::eq_64(out_yes_amount, in_yes_amount));
-                                    assert!(jet::eq_64(
-                                        safe_add(in_collateral_amount, delta_in),
-                                        out_collateral_amount
-                                    ));
+                                    assert!(
+                                        jet::eq_64(
+                                            safe_add(in_collateral_amount, delta_in),
+                                            out_collateral_amount
+                                        )
+                                    );
                                 },
                                 false => {
                                     assert!(is_sell_no);
                                     assert!(jet::eq_64(delta_in, traded_lots));
-                                    assert!(jet::eq_64(safe_add(in_no_amount, delta_in), out_no_amount));
+                                    assert!(
+                                        jet::eq_64(safe_add(in_no_amount, delta_in), out_no_amount)
+                                    );
                                     assert!(jet::eq_64(out_yes_amount, in_yes_amount));
-                                    assert!(jet::eq_64(
-                                        safe_add(out_collateral_amount, delta_out),
-                                        in_collateral_amount
-                                    ));
+                                    assert!(
+                                        jet::eq_64(
+                                            safe_add(out_collateral_amount, delta_out),
+                                            in_collateral_amount
+                                        )
+                                    );
                                 },
                             };
                         },
