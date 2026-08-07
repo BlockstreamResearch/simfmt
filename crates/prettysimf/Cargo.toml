@@ -3,20 +3,19 @@ name = "prettysimf"
 version = "0.0.1"
 license.workspace = true
 edition.workspace = true
+description = "Simplicityhl prettier library"
 
 [lints]
 workspace = true
 
 [dependencies]
-annotate-snippets = { version = "0.12.16" }
-pretty = { version = "0.12.5" }
-tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
-similar = { version = "3.1.1" }
-toml = { version = "0.9.8" }
-
 simplicityhl = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-thiserror = { workspace = true }
+
+annotate-snippets = { workspace = true }
 either = { workspace = true }
+pretty = { workspace = true }
+serde = { workspace = true }
+similar = { workspace = true }
 term = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }
