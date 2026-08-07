@@ -2,7 +2,7 @@ use prettysimf::utils::EmitMode;
 use std::io::Error as IoError;
 use thiserror::Error;
 
-/// Rustfmt operations errors.
+/// Simfmt operations errors.
 #[derive(Error, Debug)]
 pub enum OperationError {
     /// An unknown help topic was requested.
