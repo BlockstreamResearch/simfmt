@@ -1,4 +1,5 @@
 use crate::simplicity_fmt::core::{Context, SyntaxKind, Trivia};
+
 use either::Either;
 use pretty::RcDoc;
 use simplicityhl::error::Span;
@@ -10,7 +11,7 @@ use simplicityhl::parse::{
 use simplicityhl::pattern::Pattern;
 use simplicityhl::types::{AliasedType, TypeDeconstructible};
 
-pub trait Doc {
+pub(super) trait Doc {
     fn to_doc<'src>(&self, context: &mut Context<'_>) -> Option<RcDoc<'src>>;
 }
 
@@ -286,7 +287,7 @@ fn gap_before_closing_delimiter<'src>(context: &mut Context<'_>, start: usize, c
 impl Doc for Visibility {
     fn to_doc<'src>(&self, _context: &mut Context<'_>) -> Option<RcDoc<'src>> {
         match self {
-            Visibility::Public => Some(RcDoc::text("pub ")),
+            Visibility::Public => Some(RcDoc::text("pub(super) ")),
             Visibility::Private => Some(RcDoc::nil()),
         }
     }

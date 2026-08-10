@@ -1,21 +1,21 @@
-use crate::config::{Color, FmtConfig, NewlineStyle};
-use crate::error::ErrorKind;
-use crate::fmt_processor::Session;
-use crate::reporter::FormatReport;
-use crate::utils::{EmitMode, Input, Verbosity};
 use std::string::FromUtf8Error;
 
-#[derive(Debug, Clone, Copy)]
-pub struct FmtFriendlyConfig {
-    /// Number of spaces per tab
+use crate::config::{Color, FmtConfig, NewlineStyle};
+use crate::fmt_processor::FormatterSession;
+use crate::utils::{EmitMode, FormatInput, Verbosity};
+
+/// User-facing formatting options for in-memory source.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct FormatOptions {
+    /// Number of spaces per indentation level.
     pub indent_width: usize,
-    /// Maximum width of each line
+    /// Preferred maximum width of each line.
     pub line_width: usize,
-    /// Unix or Windows line endings
+    /// Line endings to use in formatted output.
     pub newline_style: NewlineStyle,
 }
 
-impl Default for FmtFriendlyConfig {
+impl Default for FormatOptions {
     fn default() -> Self {
         let fmt_conf = FmtConfig::default();
 
@@ -27,7 +27,7 @@ impl Default for FmtFriendlyConfig {
     }
 }
 
-impl FmtFriendlyConfig {
+impl FormatOptions {
     fn to_fmt_config(self) -> FmtConfig {
         let mut conf = FmtConfig::default();
         // user-facing config
@@ -45,30 +45,34 @@ impl FmtFriendlyConfig {
     }
 }
 
+/// Error returned by [`pretty_simf_please`].
 #[derive(thiserror::Error, Debug)]
 pub enum PrettySimfError {
+    /// Formatting could not start or complete an operational step.
     #[error("Formatting operation failed: {0}")]
-    Operational(ErrorKind),
+    Operational(String),
+    /// Source was parsed but could not be formatted safely.
     #[error("Formatting failed:\n{0}")]
-    FormatError(FormatReport),
+    FormatError(String),
+    /// Formatted bytes unexpectedly contained invalid UTF-8.
     #[error("String conversion error: '{0}'")]
     StringConversion(#[from] FromUtf8Error),
 }
 
 /// Formats SimplicityHL source held in memory and returns the formatted source.
-pub fn pretty_simf_please(input: String, conf: FmtFriendlyConfig) -> Result<String, PrettySimfError> {
-    let conf = conf.to_fmt_config();
+pub fn pretty_simf_please(input: String, options: FormatOptions) -> Result<String, PrettySimfError> {
+    let config = options.to_fmt_config();
     let mut buf = Vec::with_capacity(input.len() * 2);
 
     let fmt_result = {
-        let mut session = Session::new(conf, Some(&mut buf));
-        session.format(Input::Text(input))
+        let mut session = FormatterSession::new(config, Some(&mut buf));
+        session.format(FormatInput::Text(input))
     };
 
     match fmt_result {
-        Ok(report) if report.has_warnings() => Err(PrettySimfError::FormatError(report)),
+        Ok(report) if report.has_warnings() => Err(PrettySimfError::FormatError(report.to_string())),
         Ok(_) => Ok(String::from_utf8(buf)?),
-        Err(error) => Err(PrettySimfError::Operational(error)),
+        Err(error) => Err(PrettySimfError::Operational(error.to_string())),
     }
 }
 
@@ -81,7 +85,7 @@ mod tests {
         let input = include_str!("../../cli/tests/source/real_contracts/single_bit.simf");
         let expected = include_str!("../../cli/tests/target/real_contracts/single_bit.simf");
 
-        let formatted = pretty_simf_please(input.to_owned(), FmtFriendlyConfig::default()).unwrap();
+        let formatted = pretty_simf_please(input.to_owned(), FormatOptions::default()).unwrap();
 
         assert_eq!(formatted, expected);
     }

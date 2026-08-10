@@ -1,6 +1,7 @@
-use crate::simfmt;
 use std::fs;
 use std::path::Path;
+
+use crate::simfmt;
 
 fn assert_fixture(input_file: &str, target_file: &str) {
     let tests_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");

@@ -1,10 +1,11 @@
-use prettysimf::utils::EmitMode;
 use std::io::Error as IoError;
+
+use prettysimf::driver::EmitMode;
 use thiserror::Error;
 
 /// Simfmt operations errors.
 #[derive(Error, Debug)]
-pub enum OperationError {
+pub(crate) enum OperationError {
     /// An unknown help topic was requested.
     #[error("Unknown help topic: `{0}`.")]
     UnknownHelpTopic(String),

@@ -1,9 +1,10 @@
 use std::io::Error as IoError;
 use std::string::FromUtf8Error;
+
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum ErrorKind {
+pub(crate) enum ErrorKind {
     /// An io error during reading or writing.
     #[error("io error: {0}")]
     IoError(#[from] IoError),

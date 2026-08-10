@@ -1,17 +1,15 @@
-use crate::error::ErrorKind;
-use crate::fmt_processor::FormattingError;
-use crate::utils::FileName;
-
-use crate::reporter::FormatReport;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-pub(crate) type SourceFile = Vec<FileRecord>;
-pub(crate) type FileRecord = (FileName, String);
+use crate::error::ErrorKind;
+use crate::fmt_processor::FormattingError;
+use crate::reporter::FormatReport;
+use crate::utils::FileName;
+
 pub(crate) type FormatErrorMap = HashMap<FileName, Vec<FormattingError>>;
 
 // Handle the results of formatting.
-pub trait FormatHandler {
+pub(crate) trait FormatHandler {
     fn handle_formatted_file(
         &mut self,
         path: FileName,

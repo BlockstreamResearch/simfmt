@@ -3,7 +3,7 @@ mod error;
 mod fmt_context;
 mod session;
 
-pub use core::*;
+pub(crate) use core::*;
 pub(crate) use error::*;
-pub use fmt_context::*;
-pub use session::*;
+pub(crate) use fmt_context::*;
+pub use session::FormatterSession;

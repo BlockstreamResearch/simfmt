@@ -1,6 +1,8 @@
-use crate::error::ErrorKind;
-use simplicityhl::error::{Diagnostic, Location};
 use std::ops::Range;
+
+use crate::error::ErrorKind;
+
+use simplicityhl::error::{Diagnostic, Location};
 
 #[derive(Debug)]
 pub(crate) struct FormattingError {
@@ -73,9 +75,6 @@ pub(crate) struct ReportedErrors {
     // Code is valid, but it is impossible to format it properly.
     pub(crate) has_formatting_errors: bool,
 
-    // Code contains macro call that was unable to format.
-    pub(crate) has_macro_format_failure: bool,
-
     // Failed an opt-in checking.
     pub(crate) has_check_errors: bool,
 
@@ -92,7 +91,6 @@ impl ReportedErrors {
         self.has_operational_errors |= other.has_operational_errors;
         self.has_parsing_errors |= other.has_parsing_errors;
         self.has_formatting_errors |= other.has_formatting_errors;
-        self.has_macro_format_failure |= other.has_macro_format_failure;
         self.has_check_errors |= other.has_check_errors;
         self.has_diff |= other.has_diff;
         self.has_unformatted_code_errors |= other.has_unformatted_code_errors;

@@ -4,6 +4,7 @@ version = "0.0.1"
 license.workspace = true
 edition.workspace = true
 description = "Simplicityhl prettier library"
+readme = "README.md"
 
 [lints]
 workspace = true

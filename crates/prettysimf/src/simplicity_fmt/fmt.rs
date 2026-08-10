@@ -2,9 +2,14 @@ use crate::config::InnerFmtConfig;
 use crate::error::ErrorKind;
 use crate::simplicity_fmt::core::Context;
 use crate::simplicity_fmt::doc::Doc;
+
 use simplicityhl::parse::ParsedSource;
 
-pub fn format_program(parsed: &ParsedSource<'_>, source: &str, config: &InnerFmtConfig) -> Result<String, ErrorKind> {
+pub(crate) fn format_program(
+    parsed: &ParsedSource<'_>,
+    source: &str,
+    config: &InnerFmtConfig,
+) -> Result<String, ErrorKind> {
     let mut context = Context::new(config, source, parsed.tokens(), parsed.prefix().end);
 
     let doc = parsed

@@ -1,5 +1,7 @@
 use super::*;
+
 use crate::utils::{OutputWriter, Verbosity};
+
 use similar::{ChangeTag, DiffTag, TextDiff};
 
 const MISSING_NEWLINE_HINT: &str = r#"\ <No final newline>"#;

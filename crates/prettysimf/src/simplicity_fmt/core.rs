@@ -5,13 +5,12 @@ use crate::config::InnerFmtConfig;
 use simplicityhl::error::Span;
 use simplicityhl::lexer::{FmtToken, FmtTokens, Token, TriviaKind};
 
-pub struct Context<'a> {
-    pub config: &'a InnerFmtConfig,
-    pub source: &'a str,
-    pub prefix_end: usize,
-    pub trivia: TriviaCursor,
-    pub syntax: SyntaxCursor,
-    semicolons: Vec<Span>,
+pub(super) struct Context<'a> {
+    pub(super) config: &'a InnerFmtConfig,
+    pub(super) source: &'a str,
+    pub(super) prefix_end: usize,
+    pub(super) trivia: TriviaCursor,
+    pub(super) syntax: SyntaxCursor,
     decimal_literals: Vec<Span>,
     used_decimal_literals: Vec<bool>,
     type_ranges: Vec<Range<usize>>,
@@ -23,7 +22,7 @@ impl<'a> Context<'a> {
     /// The context keeps source-backed indexes for trivia, semicolons, and decimal
     /// literals so later document rendering can preserve details that are not fully
     /// represented in the AST.
-    pub fn new(config: &'a InnerFmtConfig, source: &'a str, tokens: &FmtTokens<'_>, prefix_end: usize) -> Self {
+    pub(super) fn new(config: &'a InnerFmtConfig, source: &'a str, tokens: &FmtTokens<'_>, prefix_end: usize) -> Self {
         let decimal_literals: Vec<_> = tokens
             .iter()
             .filter_map(|(token, span)| matches!(token, FmtToken::Token(Token::DecLiteral(_))).then_some(*span))
@@ -36,32 +35,17 @@ impl<'a> Context<'a> {
             prefix_end,
             trivia: TriviaCursor::from_tokens(tokens),
             syntax: SyntaxCursor::from_tokens(tokens),
-            semicolons: tokens
-                .iter()
-                .filter_map(|(token, span)| matches!(token, FmtToken::Token(Token::Semi)).then_some(*span))
-                .collect(),
             decimal_literals,
             used_decimal_literals,
             type_ranges: Vec::new(),
         }
     }
 
-    /// Returns the end offset of the first semicolon between two source positions.
-    ///
-    /// This is used when formatting adjacent statements: the AST spans end before
-    /// the separating semicolon, while gap formatting needs to start after it.
-    pub fn semicolon_end_between(&self, start: usize, end: usize) -> Option<usize> {
-        self.semicolons
-            .get(self.semicolons.partition_point(|span| span.start < start))
-            .filter(|span| span.end <= end)
-            .map(|span| span.end)
-    }
-
     /// Runs `f` while `start..end` is the active source range for a type.
     ///
     /// Type formatting uses this range to recover original decimal literals for
     /// type-level constants, such as array sizes and list bounds.
-    pub fn exec_with_type_range<T>(&mut self, start: usize, end: usize, f: impl FnOnce(&mut Self) -> T) -> T {
+    pub(super) fn exec_with_type_range<T>(&mut self, start: usize, end: usize, f: impl FnOnce(&mut Self) -> T) -> T {
         self.type_ranges.push(start..end);
         let output = f(self);
         self.type_ranges.pop();
@@ -73,7 +57,7 @@ impl<'a> Context<'a> {
     /// The AST stores constants as values, so this searches decimal tokens inside
     /// the active type range and compares them after removing underscores. Matching
     /// tokens are marked as used so repeated equal values keep their own spelling.
-    pub fn original_type_decimal(&mut self, value: usize) -> Option<String> {
+    pub(super) fn original_type_decimal(&mut self, value: usize) -> Option<String> {
         let range = self.type_ranges.last()?;
 
         for (index, span) in self.decimal_literals.iter().enumerate() {
@@ -98,31 +82,31 @@ fn decimal_literal_value(literal: &str) -> Option<usize> {
 }
 
 #[derive(Clone, Debug)]
-pub struct Trivia {
-    pub kind: TriviaKind,
-    pub span: Span,
+pub(super) struct Trivia {
+    pub(super) kind: TriviaKind,
+    pub(super) span: Span,
 }
 
 impl Trivia {
-    pub fn is_comment(&self) -> bool {
+    pub(super) fn is_comment(&self) -> bool {
         matches!(self.kind, TriviaKind::LineComment | TriviaKind::BlockComment)
     }
 
-    pub fn is_line_comment(&self) -> bool {
+    pub(super) fn is_line_comment(&self) -> bool {
         matches!(self.kind, TriviaKind::LineComment)
     }
 
-    pub fn is_block_comment(&self) -> bool {
+    pub(super) fn is_block_comment(&self) -> bool {
         matches!(self.kind, TriviaKind::BlockComment)
     }
 
-    pub fn is_newline(&self) -> bool {
+    pub(super) fn is_newline(&self) -> bool {
         matches!(self.kind, TriviaKind::Newline)
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum SyntaxKind {
+pub(super) enum SyntaxKind {
     Arrow,
     Eq,
     FatArrow,
@@ -161,12 +145,12 @@ impl SyntaxKind {
 /// These boundaries let document builders attach comments around delimiters
 /// without searching or editing raw source text.
 #[derive(Debug)]
-pub struct SyntaxCursor {
+pub(super) struct SyntaxCursor {
     tokens: [Vec<Span>; SyntaxKind::COUNT],
 }
 
 impl SyntaxCursor {
-    pub fn from_tokens(tokens: &FmtTokens<'_>) -> Self {
+    pub(super) fn from_tokens(tokens: &FmtTokens<'_>) -> Self {
         let mut syntax_tokens = std::array::from_fn(|_| Vec::new());
 
         for (token, span) in tokens {
@@ -193,14 +177,14 @@ impl SyntaxCursor {
         Self { tokens: syntax_tokens }
     }
 
-    pub fn first_in(&self, kind: SyntaxKind, start: usize, end: usize) -> Option<&Span> {
+    pub(super) fn first_in(&self, kind: SyntaxKind, start: usize, end: usize) -> Option<&Span> {
         let spans = &self.tokens[kind.index()];
         spans
             .get(spans.partition_point(|span| span.start < start))
             .filter(|span| span.end <= end)
     }
 
-    pub fn last_in(&self, kind: SyntaxKind, start: usize, end: usize) -> Option<&Span> {
+    pub(super) fn last_in(&self, kind: SyntaxKind, start: usize, end: usize) -> Option<&Span> {
         let spans = &self.tokens[kind.index()];
         spans[..spans.partition_point(|span| span.end <= end)]
             .last()
@@ -214,13 +198,13 @@ impl SyntaxCursor {
 /// range. This lets a parent consume its inter-child gaps without taking trivia
 /// belonging to a nested AST node.
 #[derive(Debug)]
-pub struct TriviaCursor {
+pub(super) struct TriviaCursor {
     trivia: Vec<Trivia>,
     consumed: Vec<bool>,
 }
 
 impl TriviaCursor {
-    pub fn from_tokens(tokens: &FmtTokens<'_>) -> Self {
+    pub(super) fn from_tokens(tokens: &FmtTokens<'_>) -> Self {
         let trivia: Vec<Trivia> = tokens
             .iter()
             .filter_map(|(token, span)| match token {
@@ -238,12 +222,12 @@ impl TriviaCursor {
         Self { trivia, consumed }
     }
 
-    pub fn has_comment_in(&self, start: usize, end: usize) -> bool {
+    pub(super) fn has_comment_in(&self, start: usize, end: usize) -> bool {
         self.indices_in(start, end)
             .any(|index| !self.consumed[index] && self.trivia[index].is_comment())
     }
 
-    pub fn take_gap(&mut self, start: usize, end: usize) -> Vec<Trivia> {
+    pub(super) fn take_gap(&mut self, start: usize, end: usize) -> Vec<Trivia> {
         let mut gap = Vec::new();
         for index in self.indices_in(start, end) {
             if !self.consumed[index] {
@@ -254,7 +238,7 @@ impl TriviaCursor {
         gap
     }
 
-    pub fn remaining_comments(&self) -> impl Iterator<Item = &Trivia> {
+    pub(super) fn remaining_comments(&self) -> impl Iterator<Item = &Trivia> {
         self.trivia
             .iter()
             .zip(&self.consumed)
@@ -277,28 +261,6 @@ mod tests {
 
     fn span(start: usize, end: usize) -> Span {
         Span::new(0, start..end)
-    }
-
-    #[test]
-    fn finds_semicolons_without_scanning_the_prefix() {
-        let config = InnerFmtConfig::default();
-        let context = Context {
-            config: &config,
-            source: "",
-            prefix_end: 0,
-            trivia: TriviaCursor {
-                trivia: Vec::new(),
-                consumed: Vec::new(),
-            },
-            syntax: SyntaxCursor::from_tokens(&Vec::new()),
-            semicolons: vec![span(2, 3), span(10, 11), span(20, 21)],
-            decimal_literals: Vec::new(),
-            used_decimal_literals: Vec::new(),
-            type_ranges: Vec::new(),
-        };
-
-        assert_eq!(context.semicolon_end_between(4, 15), Some(11));
-        assert_eq!(context.semicolon_end_between(4, 10), None);
     }
 
     #[test]

@@ -97,9 +97,9 @@ crates/prettysimf
 
 ```mermaid
 flowchart TD
-    A["CLI args or library call"] --> B["Resolve FmtConfig"]
-    B --> C["Create Session"]
-    C --> D["Load Input"]
+    A["CLI args or library call"] --> B["Build FmtConfig"]
+    B --> C["Create FormatterSession"]
+    C --> D["Load FormatInput"]
     D --> E["Parse with Program::parse_with_errors_for_fmt"]
     E --> F["Build Context from AST, source, and FmtTokens"]
     F --> G["Convert Program/Item/Expr nodes into pretty::RcDoc"]
@@ -111,9 +111,9 @@ flowchart TD
     L --> M["FormatReport and exit status"]
 ```
 
-### Input
+### Format input
 
-`prettysimf::utils::Input` represents either a real file path or stdin text.
+`prettysimf::driver::FormatInput` represents either a real file path or stdin text.
 `RawFormatContext::new` loads the text into memory and records the display name
 used in reports. The current formatter works on one complete source file at a
 time.
@@ -220,20 +220,21 @@ Emission is separated from formatting through the `Emitter` trait:
   `--check`
 
 The session owns the selected emitter and calls it only after an input has
-parsed and formatted successfully. Errors and diffs are reflected in the
-session's report flags so the CLI can return a non-zero exit code when needed.
+parsed and formatted successfully. Detailed errors and diffs remain in the
+session state; callers use `has_no_errors()` to decide whether the command
+succeeded.
 
 ## Public Library API
 
 `prettysimf::pretty_simf_please` formats source held in memory:
 
 ```rust
-use prettysimf::{FmtFriendlyConfig, pretty_simf_please};
+use prettysimf::{FormatOptions, pretty_simf_please};
 
-let formatted = pretty_simf_please(source, FmtFriendlyConfig::default())?;
+let formatted = pretty_simf_please(source, FormatOptions::default())?;
 ```
 
-`FmtFriendlyConfig` exposes only stable formatting concerns:
+`FormatOptions` exposes only stable formatting concerns:
 `indent_width`, `line_width`, and `newline_style`. Internally it maps to
 `FmtConfig` with quiet stdout emission and no colors, then returns the formatted
 string from an in-memory output buffer.

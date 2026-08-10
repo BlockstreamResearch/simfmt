@@ -1,10 +1,11 @@
-use crate::emitter::EmitterConfig;
-use crate::utils::{EmitMode, Verbosity};
 use std::cell::Cell;
 use std::io::Write;
 
+use crate::emitter::EmitterConfig;
+use crate::utils::{EmitMode, Verbosity};
+
 /// Trait for values that can be used in formatter configuration.
-pub trait ConfigType: Sized {
+pub(crate) trait ConfigType: Sized {
     fn doc_hint() -> String;
 }
 
@@ -123,7 +124,7 @@ impl Default for Color {
 }
 
 impl Color {
-    pub fn use_colored_tty(&self) -> bool {
+    pub(crate) fn use_colored_tty(&self) -> bool {
         match self {
             Color::Always | Color::Auto => true,
             Color::Never => false,
@@ -347,14 +348,14 @@ impl std::fmt::Display for EmitMode {
 }
 
 impl FmtConfig {
-    pub fn formatting_config(&self) -> InnerFmtConfig {
+    pub(crate) fn formatting_config(&self) -> InnerFmtConfig {
         InnerFmtConfig {
             indent_width: self.indent_width(),
             line_width: self.line_width(),
         }
     }
 
-    pub fn get_emitter_conf(&self) -> EmitterConfig {
+    pub(crate) fn get_emitter_conf(&self) -> EmitterConfig {
         EmitterConfig {
             print_misformatted_file_names: self.print_misformatted_file_names(),
             verbose: self.verbose(),
@@ -364,7 +365,7 @@ impl FmtConfig {
 }
 
 #[derive(Debug, Clone)]
-pub struct InnerFmtConfig {
+pub(crate) struct InnerFmtConfig {
     pub indent_width: usize,
     pub line_width: usize,
 }

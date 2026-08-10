@@ -1,15 +1,15 @@
-use crate::config::load_config;
-use crate::error::OperationError;
-use anyhow::format_err;
-use getopts::{Matches, Options};
-use prettysimf::config::{Color, FmtConfig, PartialConfig};
-use prettysimf::fmt_processor::Session;
-use prettysimf::utils::{EmitMode, Input, Verbosity};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write, stdout};
 use std::path::{Path, PathBuf};
 use std::{env, io};
+
+use crate::config::load_config;
+use crate::error::OperationError;
+
+use anyhow::format_err;
+use getopts::{Matches, Options};
+use prettysimf::driver::{Color, EmitMode, FmtConfig, FormatInput, FormatterSession, PartialConfig, Verbosity};
 
 /// Simfmt operations.
 enum Operation {
@@ -203,7 +203,7 @@ impl GetOptsOptions {
         Ok(config)
     }
 
-    pub(crate) fn config_path(&self) -> Option<&Path> {
+    fn config_path(&self) -> Option<&Path> {
         self.config_path.as_deref()
     }
 }
@@ -282,23 +282,13 @@ pub fn execute(opts: &Options) -> anyhow::Result<i32> {
     }
 }
 
-pub fn format_string(input: String, config: FmtConfig) -> anyhow::Result<i32> {
+fn format_string(input: String, config: FmtConfig) -> anyhow::Result<i32> {
     let out = &mut io::stdout();
-    let mut session = Session::new(config, Some(out));
+    let mut session = FormatterSession::new(config, Some(out));
 
-    session.format_and_emit_report(Input::Text(input));
+    session.format_and_emit_report(FormatInput::Text(input));
 
-    let exit_code = if session.has_operational_errors()
-        || session.has_parsing_errors()
-        || session.has_formatting_errors()
-        || session.has_diff()
-        || session.has_check_errors()
-        || session.has_unformatted_code_errors()
-    {
-        1
-    } else {
-        0
-    };
+    let exit_code = if session.has_no_errors() { 0 } else { 1 };
     Ok(exit_code)
 }
 
@@ -307,20 +297,15 @@ fn format(files: Vec<PathBuf>, minimal_config_path: Option<String>, options: &Ge
     let cli_config = options.to_partial_config()?;
     let explicit_config_path = options.config_path();
     let mut minimal_config = PartialConfig::default();
-    let mut has_operational_errors = false;
-    let mut has_parsing_errors = false;
-    let mut has_formatting_errors = false;
-    let mut has_diff = false;
-    let mut has_check_errors = false;
-    let mut has_unformatted_code_errors = false;
+    let mut has_errors = false;
 
     for file in files {
         if !file.exists() {
             eprintln!("Error: file `{}` does not exist", file.display());
-            has_operational_errors = true;
+            has_errors = true;
         } else if file.is_dir() {
             eprintln!("Error: `{}` is a directory", file.display());
-            has_operational_errors = true;
+            has_errors = true;
         } else {
             let input_path = if explicit_config_path.is_some() {
                 None
@@ -329,16 +314,11 @@ fn format(files: Vec<PathBuf>, minimal_config_path: Option<String>, options: &Ge
             };
             let (config, _) = load_config(input_path, explicit_config_path, Some(cli_config.clone()))?;
 
-            let mut session = Session::new(config, Some(out));
-            session.format_and_emit_report(Input::File(file));
+            let mut session = FormatterSession::new(config, Some(out));
+            session.format_and_emit_report(FormatInput::File(file));
 
-            minimal_config.merge_from(&session.config.used_options());
-            has_operational_errors |= session.has_operational_errors();
-            has_parsing_errors |= session.has_parsing_errors();
-            has_formatting_errors |= session.has_formatting_errors();
-            has_diff |= session.has_diff();
-            has_check_errors |= session.has_check_errors();
-            has_unformatted_code_errors |= session.has_unformatted_code_errors();
+            minimal_config.merge_from(&session.used_options());
+            has_errors |= !session.has_no_errors();
         }
     }
 
@@ -348,17 +328,7 @@ fn format(files: Vec<PathBuf>, minimal_config_path: Option<String>, options: &Ge
         file.write_all(toml.as_bytes())?;
     }
 
-    let exit_code = if has_operational_errors
-        || has_parsing_errors
-        || has_formatting_errors
-        || has_diff
-        || has_check_errors
-        || has_unformatted_code_errors
-    {
-        1
-    } else {
-        0
-    };
+    let exit_code = if has_errors { 1 } else { 0 };
     Ok(exit_code)
 }
 
@@ -448,6 +418,7 @@ fn emit_mode_from_emit_str(emit_str: &str) -> anyhow::Result<EmitMode> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use prettysimf::NewlineStyle;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -514,7 +485,7 @@ mod tests {
             line_width: Some(150),
             verbose: Some(Verbosity::Verbose),
             emit_mode: Some(EmitMode::Stdout),
-            newline_style: Some(prettysimf::config::NewlineStyle::Windows),
+            newline_style: Some(NewlineStyle::Windows),
             color: Some(Color::Auto),
             print_misformatted_file_names: Some(true),
         };
