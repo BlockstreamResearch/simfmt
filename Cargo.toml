@@ -17,7 +17,7 @@ multiple_crate_versions = "allow"
 
 [workspace.dependencies]
 # TODO: change dep on a real one
-simplicityhl = { git = "https://github.com/ikripaka/SimplicityHL.git", branch = "feat/fmt-parser", features = ["fmt"] }
+simplicityhl = { git = "https://github.com/BlockstreamResearch/SimplicityHL.git", branch = "master", features = ["fmt"] }
 
 annotate-snippets = { version = "0.12.16" }
 anyhow = { version = "1.0.103" }
