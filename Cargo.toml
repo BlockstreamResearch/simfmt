@@ -14,3 +14,20 @@ deprecated_in_future = "warn"
 
 [workspace.lints.clippy]
 multiple_crate_versions = "allow"
+
+[workspace.dependencies]
+# TODO: change dep on a real one
+simplicityhl = { git = "https://github.com/BlockstreamResearch/SimplicityHL.git", branch = "master", features = ["fmt"] }
+
+annotate-snippets = { version = "0.12.16" }
+anyhow = { version = "1.0.103" }
+either = { version = "1.16.0" }
+getopts = { version = "0.2.24" }
+pretty = { version = "0.12.5" }
+prettysimf = { path = "./crates/prettysimf" }
+serde = { version = "1.0.228" }
+similar = { version = "3.1.1" }
+term = { version = "1.2.1" }
+thiserror = { version = "2.0.18" }
+toml = { version = "0.9.8" }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

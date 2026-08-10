@@ -72,6 +72,19 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all --check
 
+  deny:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Init cargo-deny
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check bans licenses sources
+
   clippy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -92,7 +105,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Run clippy checks
-        run: cargo clippy --workspace --all-targets --all-features
+        run: cargo --locked clippy --workspace --all-targets --all-features --keep-going -- -D warnings
         env:
           RUSTFLAGS: -Dwarnings
 

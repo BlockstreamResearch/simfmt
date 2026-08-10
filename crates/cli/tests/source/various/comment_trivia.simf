@@ -1,0 +1,16 @@
+// leading
+fn comments(a: u8, /* between parameters */ b: u8) /* before return arrow */ -> u8 {
+    let x: u8 = /* after equals */ add(a, /* between arguments */ b); // after statement
+    // before match
+    match Left(x) /* before match body */ {
+        // before left arm
+        Left(v: u8) => /* after arrow */ list![v, /* between elements */ b],
+        // between arms
+        Right(v: u8) => {
+            /* inside block */
+            v
+        },
+        // before closing brace
+    }
+}
+// eof
