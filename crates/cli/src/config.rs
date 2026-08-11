@@ -187,7 +187,10 @@ mod tests {
     use super::*;
     use prettysimf::NewlineStyle;
     use prettysimf::driver::{Color, EmitMode, Verbosity};
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static NEXT_TEST_DIRECTORY: AtomicUsize = AtomicUsize::new(0);
 
     struct TestDirectory(PathBuf);
 
@@ -197,7 +200,11 @@ mod tests {
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock is before the Unix epoch")
                 .as_nanos();
-            let path = std::env::temp_dir().join(format!("simfmt-config-test-{}-{timestamp}", std::process::id()));
+            let sequence = NEXT_TEST_DIRECTORY.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir().join(format!(
+                "simfmt-config-test-{}-{timestamp}-{sequence}",
+                std::process::id()
+            ));
             fs::create_dir_all(&path).unwrap();
             Self(path)
         }

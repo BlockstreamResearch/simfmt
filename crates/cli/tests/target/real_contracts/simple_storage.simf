@@ -15,8 +15,8 @@ fn ensure_input_and_output_script_hash_eq(index: u32) {
 
 fn ensure_output_is_op_return(index: u32) {
     match jet::output_null_datum(index, 0) {
-        Some(entry: Option<Either<(u2, u256), Either<u1, u4>>>) => (),
         None => panic!(),
+        Some(entry: Option<Either<(u2, u256), Either<u1, u4>>>) => (),
     }
 }
 
@@ -67,6 +67,10 @@ fn enforce_stage_checks(index: u32, new_value: u64) {
     ensure_output_asset_with_amount_eq(index, param::SLOT_ID, new_value);
 
     match jet::lt_64(new_value, old_value) {
+        false => {
+            let reissuance_output_index: u32 = increment_by(index, 1);
+            ensure_input_and_output_script_hash_eq(reissuance_output_index);
+        },
         true => {
             let burn_output_index: u32 = increment_by(index, 1);
 
@@ -75,10 +79,6 @@ fn enforce_stage_checks(index: u32, new_value: u64) {
 
             ensure_output_is_op_return(burn_output_index);
             ensure_output_asset_with_amount_eq(burn_output_index, param::SLOT_ID, amount_to_burn);
-        },
-        false => {
-            let reissuance_output_index: u32 = increment_by(index, 1);
-            ensure_input_and_output_script_hash_eq(reissuance_output_index);
         },
     };
 }

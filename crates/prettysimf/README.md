@@ -16,7 +16,7 @@ integrations.
 ```rust
 use prettysimf::{FormatOptions, NewlineStyle, pretty_simf_please};
 
-# fn main() {
+# fn main() -> Result<(), prettysimf::PrettySimfError> {
 let source = "fn main(){assert!(jet::eq_1(param::FLAG,witness::BIT));}";
 let options = FormatOptions {
     indent_width: 2,
@@ -24,7 +24,7 @@ let options = FormatOptions {
     newline_style: NewlineStyle::Unix,
 };
 let formatted = pretty_simf_please(source, options)?;
-# Ok::<(), prettysimf::PrettySimfError>(())
+# Ok(())
 # }
 ```
 
@@ -56,20 +56,21 @@ TOML loading remain private to the `simfmt` CLI.
 use prettysimf::driver::{
     EmitMode, FmtConfig, FormatInput, FormatterSession, PartialConfig,
 };
-
+# fn main() {
 let mut config = FmtConfig::default();
 config.apply_override(PartialConfig {
-    emit_mode: Some(EmitMode::Stdout),
-    ..PartialConfig::default()
+emit_mode: Some(EmitMode::Stdout),
+..PartialConfig::default()
 });
 
 let mut output = Vec::new();
-let mut session = FormatterSession::new(config, Some(&mut output));
+let mut session = FormatterSession::new(config, Some( & mut output));
 session.format_and_emit_report(FormatInput::Text("fn main() {}".to_owned()));
 
-if !session.has_no_errors() {
-    // Formatting failed or produced a check/diff error.
+if ! session.has_no_errors() {
+// Formatting failed or produced a check/diff error.
 }
+# }
 ```
 
 The session preserves the formatter's detailed error state internally while

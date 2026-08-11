@@ -1087,14 +1087,7 @@ impl Doc for Match {
             .last_in(SyntaxKind::RBrace, open.end, span.end)
             .copied()?;
 
-        // TODO: remove to reduce reordering
-        // let (left_arm, right_arm) = (self.left(), self.right());
-        let (left_arm, right_arm) = match self.left().pattern() {
-            MatchPattern::Left(_, _) | MatchPattern::Right(_, _) | MatchPattern::Some(_, _) | MatchPattern::True => {
-                (self.left(), self.right())
-            }
-            MatchPattern::None | MatchPattern::False => (self.right(), self.left()),
-        };
+        let (left_arm, right_arm) = (self.left(), self.right());
 
         let left = SpannedDoc {
             span: *left_arm.span(),
