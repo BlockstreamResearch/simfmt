@@ -126,21 +126,13 @@ fn error_kind_to_snippet_annotation_level(error_kind: &ErrorKind) -> Level<'_> {
 pub(crate) struct FormatReport {
     // Maps stringified file paths to their associated formatting errors.
     pub(crate) internal: Rc<RefCell<(FormatErrorMap, ReportedErrors)>>,
-    #[allow(dead_code)]
-    non_formatted_ranges: Vec<(usize, usize)>,
 }
 
 impl FormatReport {
     pub(crate) fn new() -> FormatReport {
         FormatReport {
             internal: Rc::new(RefCell::new((HashMap::new(), ReportedErrors::default()))),
-            non_formatted_ranges: Vec::new(),
         }
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn add_non_formatted_ranges(&mut self, mut ranges: Vec<(usize, usize)>) {
-        self.non_formatted_ranges.append(&mut ranges);
     }
 
     pub(crate) fn append(&self, f: FileName, mut v: Vec<FormattingError>) {

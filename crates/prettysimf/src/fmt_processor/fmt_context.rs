@@ -22,9 +22,6 @@ pub(crate) struct RawFormatContext {
     buffer: String,
 }
 
-#[allow(dead_code)]
-pub(crate) type ParsedProgram<'src> = Result<ParsedSource<'src>, Vec<Diagnostic>>;
-
 impl RawFormatContext {
     pub(crate) fn new(input: FormatInput) -> Result<Self, ErrorKind> {
         let main_file = input.file_name();

@@ -4,7 +4,6 @@
 #![warn(clippy::all, clippy::pedantic, missing_docs, unreachable_pub)]
 
 mod api;
-#[allow(missing_docs)]
 mod config;
 mod emitter;
 mod error;
