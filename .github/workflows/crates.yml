@@ -136,3 +136,6 @@ jobs:
 
       - name: Check hack
         run: cargo hack check
+
+      - name: Check feature feature-powerset with hack
+        run: cargo hack check --feature-powerset --no-dev-deps --workspace
