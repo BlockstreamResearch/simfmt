@@ -36,6 +36,8 @@ enum HelpOp {
     Config,
 }
 
+/// Builds the command-line option parser used by the `simfmt` binary.
+#[must_use]
 pub fn make_opts() -> Options {
     let mut opts = Options::new();
 
@@ -85,6 +87,7 @@ pub fn make_opts() -> Options {
 
 /// Parsed command line options.
 #[derive(Clone, Debug, Default)]
+#[allow(clippy::struct_excessive_bools)]
 struct GetOptsOptions {
     quiet: bool,
     verbose: bool,
@@ -117,16 +120,15 @@ impl GetOptsOptions {
             .map(|key_val| match key_val.char_indices().find(|(_, ch)| *ch == '=') {
                 Some((middle, _)) => {
                     let (key, val) = (&key_val[..middle], &key_val[middle + 1..]);
-                    if !FmtConfig::is_valid_key_val(key, val) {
-                        Err(format_err!("invalid key=val pair: `{}`", key_val))
-                    } else {
+                    if FmtConfig::is_valid_key_val(key, val) {
                         Ok((key.to_string(), val.to_string()))
+                    } else {
+                        Err(format_err!("invalid key=val pair: `{key_val}`"))
                     }
                 }
 
                 None => Err(format_err!(
-                    "--config expects comma-separated list of key=val pairs, found `{}`",
-                    key_val
+                    "--config expects comma-separated list of key=val pairs, found `{key_val}`"
                 )),
             })
             .collect::<anyhow::Result<HashMap<_, _>, _>>()?;
@@ -143,7 +145,7 @@ impl GetOptsOptions {
         if let Some(ref color) = matches.opt_str("color") {
             match color.parse::<Color>() {
                 Ok(c) => options.color = Some(c),
-                _ => return Err(format_err!("Invalid color: {}", color)),
+                _ => return Err(format_err!("Invalid color: {color}")),
             }
         }
 
@@ -208,7 +210,13 @@ impl GetOptsOptions {
     }
 }
 
-// Returned i32 is an exit code
+/// Parses the current process arguments, executes the selected operation, and
+/// returns its process exit code.
+///
+/// # Errors
+///
+/// Returns an error when arguments or configuration values are invalid, a
+/// configuration file cannot be loaded, or command output cannot be written.
 pub fn execute(opts: &Options) -> anyhow::Result<i32> {
     let matches = opts.parse(env::args().skip(1))?;
     let options = GetOptsOptions::from_matches(&matches)?;
@@ -237,9 +245,8 @@ pub fn execute(opts: &Options) -> anyhow::Result<i32> {
             Ok(0)
         }
         Operation::ConfigOutputCurrent { path } => {
-            let path = match path {
-                Some(path) => path,
-                None => return Err(format_err!("PATH required for `--print-config current`")),
+            let Some(path) = path else {
+                return Err(format_err!("PATH required for `--print-config current`"));
             };
 
             let file = PathBuf::from(path);
@@ -273,7 +280,7 @@ pub fn execute(opts: &Options) -> anyhow::Result<i32> {
                 config.set().emit_mode(EmitMode::Stdout);
             }
 
-            format_string(input, config)
+            Ok(format_string(input, config))
         }
         Operation::Format {
             files,
@@ -282,14 +289,15 @@ pub fn execute(opts: &Options) -> anyhow::Result<i32> {
     }
 }
 
-fn format_string(input: String, config: FmtConfig) -> anyhow::Result<i32> {
+fn format_string(input: String, config: FmtConfig) -> i32 {
     let out = &mut io::stdout();
     let mut session = FormatterSession::new(config, Some(out));
 
     session.format_and_emit_report(FormatInput::Text(input));
 
+    #[allow(clippy::bool_to_int_with_if)]
     let exit_code = if session.has_no_errors() { 0 } else { 1 };
-    Ok(exit_code)
+    exit_code
 }
 
 fn format(files: Vec<PathBuf>, minimal_config_path: Option<String>, options: &GetOptsOptions) -> anyhow::Result<i32> {
@@ -328,6 +336,7 @@ fn format(files: Vec<PathBuf>, minimal_config_path: Option<String>, options: &Ge
         file.write_all(toml.as_bytes())?;
     }
 
+    #[allow(clippy::bool_to_int_with_if)]
     let exit_code = if has_errors { 1 } else { 0 };
     Ok(exit_code)
 }

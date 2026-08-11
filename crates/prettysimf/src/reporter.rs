@@ -47,7 +47,7 @@ pub(crate) struct FormatReportFormatter<'a> {
     enable_colors: bool,
 }
 
-impl<'a> fmt::Display for FormatReportFormatter<'a> {
+impl fmt::Display for FormatReportFormatter<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let errors_by_file = &self.report.internal.borrow().0;
 
@@ -169,7 +169,7 @@ impl FormatReport {
     }
 
     pub(crate) fn warning_count(&self) -> usize {
-        self.internal.borrow().0.values().map(|errors| errors.len()).sum()
+        self.internal.borrow().0.values().map(Vec::len).sum()
     }
 
     /// Whether any warnings or errors are present in the report.

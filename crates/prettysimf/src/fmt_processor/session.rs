@@ -37,7 +37,7 @@ pub(crate) fn format_project<T: FormatHandler>(
     let raw_ctx = RawFormatContext::new(input)?;
 
     // Format file
-    should_emit_verbose(input_is_stdin, config, || println!("Formatting {}", main_file));
+    should_emit_verbose(input_is_stdin, config, || println!("Formatting {main_file}"));
     context.format_file(raw_ctx)?;
 
     timer = timer.done_formatting();
@@ -47,7 +47,7 @@ pub(crate) fn format_project<T: FormatHandler>(
             "Spent {0:.3} secs in the parsing phase, and {1:.3} secs in the formatting phase",
             timer.get_parse_time(),
             timer.get_format_time(),
-        )
+        );
     });
 
     Ok(context.report)

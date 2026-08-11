@@ -8,7 +8,7 @@ use crate::reporter::FormatReport;
 use crate::utils::{FileName, FormatInput};
 
 use simplicityhl::error::{Diagnostic, DiagnosticManager};
-use simplicityhl::parse::{ParsedSource, Program};
+use simplicityhl::parse::Program;
 
 pub(crate) struct FormatContext<'a, T: FormatHandler> {
     pub(crate) report: FormatReport,

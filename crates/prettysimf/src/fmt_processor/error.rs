@@ -65,6 +65,7 @@ impl FormattingError {
 }
 
 #[derive(Default, Debug, PartialEq)]
+#[allow(clippy::struct_excessive_bools)]
 pub(crate) struct ReportedErrors {
     // Encountered e.g., an IO error.
     pub(crate) has_operational_errors: bool,

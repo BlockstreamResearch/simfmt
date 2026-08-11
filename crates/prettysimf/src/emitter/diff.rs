@@ -1,10 +1,13 @@
-use super::*;
+use super::{Emitter, EmitterConfig, EmitterResult, FormattedFile, Write, io};
+
+#[cfg(test)]
+use super::FileName;
 
 use crate::utils::{OutputWriter, Verbosity};
 
 use similar::{ChangeTag, DiffTag, TextDiff};
 
-const MISSING_NEWLINE_HINT: &str = r#"\ <No final newline>"#;
+const MISSING_NEWLINE_HINT: &str = r"\ <No final newline>";
 
 pub(crate) struct DiffEmitter {
     config: EmitterConfig,
@@ -34,13 +37,13 @@ impl Emitter for DiffEmitter {
                 writeln!(output, "{filename}")?;
             } else {
                 print_diff(
-                    mismatch,
+                    &mismatch,
                     |line_num| match line_num {
                         None => {
-                            format!("Diff in {}: ", filename)
+                            format!("Diff in {filename}: ")
                         }
                         Some(line_num) => {
-                            format!("Diff in {}:{}:", filename, line_num)
+                            format!("Diff in {filename}:{line_num}:")
                         }
                     },
                     &self.config,
@@ -52,7 +55,7 @@ impl Emitter for DiffEmitter {
     }
 }
 
-fn print_diff<F>(diff: TextDiff<'_, '_, str>, get_section_title: F, config: &EmitterConfig)
+fn print_diff<F>(diff: &TextDiff<'_, '_, str>, get_section_title: F, config: &EmitterConfig)
 where
     F: Fn(Option<usize>) -> String,
 {
@@ -106,7 +109,7 @@ mod tests {
         let header_calls = AtomicUsize::new(0);
 
         print_diff(
-            TextDiff::from_lines("one\ntwo\n", "one\nthree\n"),
+            &TextDiff::from_lines("one\ntwo\n", "one\nthree\n"),
             |_| {
                 header_calls.fetch_add(1, Ordering::Relaxed);
                 "Diff in test.simf:".to_owned()
@@ -180,7 +183,7 @@ mod tests {
             )
             .unwrap();
 
-        assert_eq!(String::from_utf8(writer).unwrap(), format!("{bin_file}\n{lib_file}\n"),)
+        assert_eq!(String::from_utf8(writer).unwrap(), format!("{bin_file}\n{lib_file}\n"));
     }
 
     #[test]
@@ -208,6 +211,6 @@ mod tests {
 
         assert!(diff.newline_terminated());
         assert!(diff.iter_all_changes().any(|change| change.missing_newline()));
-        assert_eq!(MISSING_NEWLINE_HINT, r#"\ <No final newline>"#);
+        assert_eq!(MISSING_NEWLINE_HINT, r"\ <No final newline>");
     }
 }

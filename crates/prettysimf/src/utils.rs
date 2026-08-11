@@ -208,6 +208,7 @@ impl Timer {
         }
     }
 
+    #[allow(clippy::cast_precision_loss)]
     fn duration_to_f32(d: Duration) -> f32 {
         d.as_secs() as f32 + d.subsec_nanos() as f32 / 1_000_000_000f32
     }
@@ -239,8 +240,7 @@ impl FormatInput {
 
         if size > MAX_FILE_SIZE.into() {
             return Err(io::Error::other(format!(
-                "text files larger than {} bytes are unsupported",
-                MAX_FILE_SIZE
+                "text files larger than {MAX_FILE_SIZE} bytes are unsupported",
             )));
         }
         let mut contents = String::new();
@@ -257,7 +257,7 @@ impl FormatInput {
 }
 
 impl EmitMode {
-    pub(crate) fn create_emitter<'a>(&self, config: &EmitterConfig) -> Box<dyn Emitter + 'a> {
+    pub(crate) fn create_emitter<'a>(self, config: &EmitterConfig) -> Box<dyn Emitter + 'a> {
         match self {
             EmitMode::Files => Box::new(emitter::FilesEmitter::new(config.print_misformatted_file_names)),
             EmitMode::Stdout => Box::new(emitter::StdoutEmitter::new(config.verbose)),

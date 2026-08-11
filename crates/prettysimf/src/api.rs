@@ -59,7 +59,14 @@ pub enum PrettySimfError {
     StringConversion(#[from] FromUtf8Error),
 }
 
-/// Formats SimplicityHL source held in memory and returns the formatted source.
+/// Formats `SimplicityHL` source held in memory and returns the formatted source.
+///
+/// # Errors
+///
+/// Returns
+/// * [`PrettySimfError::Operational`] when the formatting operation cannot complete
+/// * [`PrettySimfError::FormatError`] when the source cannot be parsed or formatted safely
+/// * [`PrettySimfError::StringConversion`] when the formatted output is not valid UTF-8.
 pub fn pretty_simf_please(input: impl Into<String>, options: FormatOptions) -> Result<String, PrettySimfError> {
     let input = input.into();
     let config = options.to_fmt_config();

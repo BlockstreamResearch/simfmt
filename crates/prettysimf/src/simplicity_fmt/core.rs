@@ -254,8 +254,7 @@ impl TriviaCursor {
 
 #[cfg(test)]
 mod tests {
-    use super::{Context, SyntaxCursor, SyntaxKind, Trivia, TriviaCursor};
-    use crate::config::InnerFmtConfig;
+    use super::{SyntaxCursor, SyntaxKind, Trivia, TriviaCursor};
     use simplicityhl::error::Span;
     use simplicityhl::lexer::{FmtToken, Token, TriviaKind};
 
