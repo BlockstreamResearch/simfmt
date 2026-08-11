@@ -60,7 +60,8 @@ pub enum PrettySimfError {
 }
 
 /// Formats SimplicityHL source held in memory and returns the formatted source.
-pub fn pretty_simf_please(input: String, options: FormatOptions) -> Result<String, PrettySimfError> {
+pub fn pretty_simf_please(input: impl Into<String>, options: FormatOptions) -> Result<String, PrettySimfError> {
+    let input = input.into();
     let config = options.to_fmt_config();
     let mut buf = Vec::with_capacity(input.len() * 2);
 
