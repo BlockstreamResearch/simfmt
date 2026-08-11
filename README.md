@@ -1,24 +1,45 @@
 # simfmt
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://github.com/BlockstreamResearch/simfmt/actions/workflows/crates.yml/badge.svg?branch=master)](https://github.com/BlockstreamResearch/simfmt/workflows/crates.yml)
+[![Integration](https://github.com/BlockstreamResearch/simfmt/actions/workflows/fixtures.yml/badge.svg?branch=master)](https://github.com/BlockstreamResearch/simfmt/workflows/fixtures.yml)
+[![Community](https://img.shields.io/endpoint?color=neon&logo=telegram&label=Chat&url=https%3A%2F%2Ftg.sumanjay.workers.dev%2Fsimplicity_community)](https://t.me/simplicity_community)
+
+
 This repository consists form two crates, which can be used separately.
 
 * `simfmt`
-  A tool for formatting SimplicityHL code according to style guidelines.
+  A tool for formatting [SimplicityHL][1] code according to style guidelines.
 * `prettysimf`
-  A library for formatting SimplicityHL code inplace in code. To emit already pretty formatted files.
+  A library for formatting [SimplicityHL][1] code inplace in code. To emit already pretty formatted files.
 
 If you'd like to help out (and you should, it's a fun project!), see
 [Contributing.md](Contributing.md) and our [Code of Conduct](CODE_OF_CONDUCT.md).
 
-## Installation
+## Using prettysimf as a library
 
-Install `cargo-simfmt` with cargo:
+Use `prettysimf` when formatting SimplicityHL source held in memory, such as in
+an editor integration, language service, or another Rust application.
 
-`cargo install cargo-simfmt`
+```rust
+use prettysimf::{FormatOptions, pretty_simf_please};
+
+fn main() {
+    let source = "fn main(){assert!(true);}";
+    let formatted =
+        pretty_simf_please(source.to_owned(), FormatOptions::default())?;
+}
+```
+
+## Installing the CLI
+
+Install `simfmt` with cargo:
+
+`cargo install simfmt`
 
 ## Limitations
 
-Simfmt tries to work on as much SimplicityHL code as possible. Sometimes, the code doesn't even need to compile, but
+Simfmt tries to work on as much [SimplicityHL][1] code as possible. Sometimes, the code doesn't even need to compile, but
 need to be valid from tokens point! In general, we are looking to limit areas of instability; the formatting of most
 code should not change as Simfmt improves. However, there are some things that Simfmt can't do or can't do well. We
 would like to reduce the list of limitations over time.
@@ -31,7 +52,7 @@ The following list enumerates areas where Simfmt does not work or where the stab
   tricky moments it can fail. We recommend using comments in predictable and simple use-cases. Don't worry, your code
   won't be chewed up by the formatter; it will just fail and won't touch your code in tricky places. We hope to fix this
   over time.)
-* SimplicityHL code in code blocks in comments.
+* [SimplicityHL][1] code in code blocks in comments.
 * Any fragment of a program (i.e., stability guarantees only apply to whole programs, even where fragments of a program
   can be formatted today).
 * Code containing non-ascii unicode characters (we believe Simfmt mostly works here, but do not have the test coverage
@@ -44,16 +65,16 @@ You can run Simfmt by just typing `simfmt filename` if you used `cargo
 install`. This runs simfmt on the given file, if the file includes out of line modules, then we reformat those too.
 Simfmt can also read data from stdin.
 
-You can run `simfmt --help` for information about available arguments. The easiest way to run simfmt against a project
-is with ``
+You can run `simfmt --help` for information about available arguments. The easiest way to run `simfmt` against a project
+is with `prettysimf`.
 
 ### Running `simfmt` directly
 
 To format individual files or arbitrary codes from stdin, the `simfmt` binary should be used. Some examples follow:
 
-- `simfmt utils.simf main.simf` will format "utils.rs" and "main.rs" in place
+- `simfmt utils.simf main.simf` will format "utils.simf" and "main.simf" in place
 - `simfmt` will read a code from stdin and write formatting to stdout
-    - `echo "fn     main() {}" | simfmt` would emit `"fn main () {}"`.
+    - `echo "fn     main() {}" | simfmt` would emit `"fn main() {}"`.
 
 For more information, including arguments and emit options, see `simfmt --help`.
 
@@ -114,8 +135,14 @@ previews.
   | files | overwrites output to files |
   | stdout | writes output to stdout |
 
+## Appendix
+To Read more information about `simfmt` go [here](./crates/cli/README.md) or about `prettysimf` go [here](./crates/prettysimf/README.md)
+
 ## License
 
 Simfmt is distributed under the terms of both the MIT license.
 
 See [MIT license](LICENSE) for details.
+
+
+[1]: https://simplicity-lang.org/
