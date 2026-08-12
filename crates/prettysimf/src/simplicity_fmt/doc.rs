@@ -288,7 +288,7 @@ fn gap_before_closing_delimiter<'src>(context: &mut Context<'_>, start: usize, c
 impl Doc for Visibility {
     fn to_doc<'src>(&self, _context: &mut Context<'_>) -> Option<RcDoc<'src>> {
         match self {
-            Visibility::Public => Some(RcDoc::text("pub(super) ")),
+            Visibility::Public => Some(RcDoc::text("pub ")),
             Visibility::Private => Some(RcDoc::nil()),
         }
     }

@@ -197,6 +197,22 @@ mod tests {
     }
 
     #[test]
+    fn preserves_public_function_visibility() {
+        let source = "pub fn safe_add_64(a:u64,b:u64)->u64{unwrap(checked_add_64(a,b))}";
+        let expected = "pub fn safe_add_64(a: u64, b: u64) -> u64 {\n    unwrap(checked_add_64(a, b))\n}";
+
+        utils::assert_formatting_in_all_modes(source, expected);
+    }
+
+    #[test]
+    fn preserves_omitted_function_visibility() {
+        let source = "fn safe_add_64(a:u64,b:u64)->u64{unwrap(checked_add_64(a,b))}";
+        let expected = "fn safe_add_64(a: u64, b: u64) -> u64 {\n    unwrap(checked_add_64(a, b))\n}";
+
+        utils::assert_formatting_in_all_modes(source, expected);
+    }
+
+    #[test]
     fn preserves_comments_in_match() {
         let source = "fn main() {
     match witness::PATH /* before match body */ {
