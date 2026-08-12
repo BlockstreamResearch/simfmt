@@ -116,8 +116,8 @@ type MerkleAcc = (u256, u32);
 fn merkle_compute_step(sib_node: MerkleNode, acc: MerkleAcc) -> MerkleAcc {
     let (curr_node, path): MerkleAcc = acc;
     let next_node: u256 = match jet::divides_32(2, path) {
-        false => sha256_pair(sib_node, curr_node),
         true => sha256_pair(curr_node, sib_node),
+        false => sha256_pair(sib_node, curr_node),
     };
     (next_node, jet::divide_32(path, 2))
 }
@@ -191,15 +191,15 @@ fn div_mod_step(
 ) -> Either<u32, ExtendedEuclideanAcc> {
     let (t, r, new_t, new_r): ExtendedEuclideanAcc = acc;
     match jet::is_zero_32(new_r) {
+        true => {
+            assert!(jet::eq_32(r, 1));
+            Left(t)
+        },
         false => {
             let q: u32 = jet::divide_32(r, new_r);
             let (t, new_t): (u32, u32) = (new_t, sub_mod(t, mul_mod(q, new_t)));
             let (r, new_r): (u32, u32) = (new_r, sub_mod(r, mul_mod(q, new_r)));
             Right((t, r, new_t, new_r))
-        },
-        true => {
-            assert!(jet::eq_32(r, 1));
-            Left(t)
         },
     }
 }
@@ -218,16 +218,16 @@ type ExpModAcc = (u32, u32, u32);
 fn exp_mod_step(acc: ExpModAcc, context: (), counter: u16) -> Either<u32, ExpModAcc> {
     let (res, base, exp): ExpModAcc = acc;
     match jet::is_zero_32(exp) {
+        true => Left(res),
         false => {
             let new_res: u32 = match jet::divides_32(2, exp) {
-                false => mul_mod(res, base),
                 true => res,
+                false => mul_mod(res, base),
             };
             let new_base: u32 = mul_mod(base, base);
             let new_exp: u32 = jet::divide_32(exp, 2);
             Right((new_res, new_base, new_exp))
         },
-        true => Left(res),
     }
 }
 

@@ -79,7 +79,6 @@ fn ensure_correct_change_at_index(
     assert!(jet::eq_256(unwrap(jet::input_script_hash(index)), contract_script_hash));
 
     match is_change_needed {
-        false => assert!(jet::eq_64(asset_amount_to_spend, available_asset_amount)),
         true => {
             ensure_input_and_output_script_hash_eq(index);
 
@@ -90,6 +89,7 @@ fn ensure_correct_change_at_index(
             ensure_zero_bit(carry);
             ensure_output_asset_with_amount_eq(index, asset_id, asset_change);
         },
+        false => assert!(jet::eq_64(asset_amount_to_spend, available_asset_amount)),
     }
 }
 
@@ -156,8 +156,8 @@ fn exercise_path(collateral_amount: u64, is_change_needed: bool) {
         collateral_output_index,
         premium_output_index
     ): (u32, u32, u32) = match is_change_needed {
-        false => (0, 1, 2),
         true => (2, 3, 4),
+        false => (0, 1, 2),
     };
 
     ensure_output_script_hash_eq(settlement_output_index, expected_covenant_script_hash);

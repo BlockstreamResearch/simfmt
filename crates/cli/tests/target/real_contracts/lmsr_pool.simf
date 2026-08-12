@@ -172,8 +172,8 @@ fn merkle_proof_step_fn(element: (u256, bool), acc: (u256, u32, u32)) -> (u256, 
     let (sibling, is_right): (u256, bool) = element;
     assert!(not(jet::le_32(depth, level)));
     let next_hash: u256 = match is_right {
-        false => lmsr_table_node_hash(current, sibling),
         true => lmsr_table_node_hash(sibling, current),
+        false => lmsr_table_node_hash(current, sibling),
     };
     let next_level: u32 = safe_add_32(level, 1);
     (next_hash, next_level, depth)
@@ -204,8 +204,8 @@ fn check_trade_direction(kind: u8, old_s: u64, new_s: u64) {
 
     let moves_up: bool = or(is_buy_yes, is_sell_no);
     match moves_up {
-        false => assert!(lt_64(new_s, old_s)),
         true => assert!(gt_64(new_s, old_s)),
+        false => assert!(lt_64(new_s, old_s)),
     };
 }
 
@@ -429,8 +429,8 @@ fn lmsr_primary_main(
             assert!(gt_64(delta_out, 0));
 
             let steps: u64 = match gt_64(new_s_index, old_s_index) {
-                false => safe_subtract(old_s_index, new_s_index),
                 true => safe_subtract(new_s_index, old_s_index),
+                false => safe_subtract(old_s_index, new_s_index),
             };
             let traded_lots: u64 = safe_multiply(steps, param::Q_STEP_LOTS);
             assert!(gt_64(traded_lots, 0));
@@ -445,18 +445,18 @@ fn lmsr_primary_main(
             // Signed-safe quote branch on table deltas (Fn-Fo can be positive or negative).
             let fn_ge_fo: bool = jet::le_64(f_old, f_new);
             let base_notional: u64 = match fn_ge_fo {
-                false => {
-                    let d_down: u64 = safe_subtract(f_old, f_new);
-                    match is_buy {
-                        false => safe_add(l, d_down),
-                        true => safe_subtract(l, d_down),
-                    }
-                },
                 true => {
                     let d_up: u64 = safe_subtract(f_new, f_old);
                     match is_buy {
-                        false => safe_subtract(l, d_up),
                         true => safe_add(l, d_up),
+                        false => safe_subtract(l, d_up),
+                    }
+                },
+                false => {
+                    let d_down: u64 = safe_subtract(f_old, f_new);
+                    match is_buy {
+                        true => safe_subtract(l, d_down),
+                        false => safe_add(l, d_down),
                     }
                 },
             };
@@ -465,11 +465,6 @@ fn lmsr_primary_main(
             // buy:  delta_in  * fee_c    >= base_notional * FEE_DENOM
             // sell: delta_out * FEE_DENOM <= base_notional * fee_c
             match is_buy {
-                false => {
-                    let (lhs_high, lhs_low): (u64, u64) = multiply_64_wide(delta_out, fee_denom);
-                    let (rhs_high, rhs_low): (u64, u64) = multiply_64_wide(base_notional, fee_c);
-                    assert!(ge_u128(rhs_high, rhs_low, lhs_high, lhs_low));
-                },
                 true => {
                     let (lhs_high, lhs_low): (u64, u64) = multiply_64_wide(delta_in, fee_c);
                     let (
@@ -478,13 +473,50 @@ fn lmsr_primary_main(
                     ): (u64, u64) = multiply_64_wide(base_notional, fee_denom);
                     assert!(ge_u128(lhs_high, lhs_low, rhs_high, rhs_low));
                 },
+                false => {
+                    let (lhs_high, lhs_low): (u64, u64) = multiply_64_wide(delta_out, fee_denom);
+                    let (rhs_high, rhs_low): (u64, u64) = multiply_64_wide(base_notional, fee_c);
+                    assert!(ge_u128(rhs_high, rhs_low, lhs_high, lhs_low));
+                },
             };
 
             match is_buy_yes {
+                true => {
+                    assert!(jet::eq_64(delta_out, traded_lots));
+                    assert!(jet::eq_64(safe_add(out_yes_amount, delta_out), in_yes_amount));
+                    assert!(jet::eq_64(out_no_amount, in_no_amount));
+                    assert!(
+                        jet::eq_64(safe_add(in_collateral_amount, delta_in), out_collateral_amount)
+                    );
+                },
                 false => {
                     match is_sell_yes {
+                        true => {
+                            assert!(jet::eq_64(delta_in, traded_lots));
+                            assert!(jet::eq_64(safe_add(in_yes_amount, delta_in), out_yes_amount));
+                            assert!(jet::eq_64(out_no_amount, in_no_amount));
+                            assert!(
+                                jet::eq_64(
+                                    safe_add(out_collateral_amount, delta_out),
+                                    in_collateral_amount
+                                )
+                            );
+                        },
                         false => {
                             match is_buy_no {
+                                true => {
+                                    assert!(jet::eq_64(delta_out, traded_lots));
+                                    assert!(
+                                        jet::eq_64(safe_add(out_no_amount, delta_out), in_no_amount)
+                                    );
+                                    assert!(jet::eq_64(out_yes_amount, in_yes_amount));
+                                    assert!(
+                                        jet::eq_64(
+                                            safe_add(in_collateral_amount, delta_in),
+                                            out_collateral_amount
+                                        )
+                                    );
+                                },
                                 false => {
                                     assert!(is_sell_no);
                                     assert!(jet::eq_64(delta_in, traded_lots));
@@ -499,41 +531,9 @@ fn lmsr_primary_main(
                                         )
                                     );
                                 },
-                                true => {
-                                    assert!(jet::eq_64(delta_out, traded_lots));
-                                    assert!(
-                                        jet::eq_64(safe_add(out_no_amount, delta_out), in_no_amount)
-                                    );
-                                    assert!(jet::eq_64(out_yes_amount, in_yes_amount));
-                                    assert!(
-                                        jet::eq_64(
-                                            safe_add(in_collateral_amount, delta_in),
-                                            out_collateral_amount
-                                        )
-                                    );
-                                },
                             };
                         },
-                        true => {
-                            assert!(jet::eq_64(delta_in, traded_lots));
-                            assert!(jet::eq_64(safe_add(in_yes_amount, delta_in), out_yes_amount));
-                            assert!(jet::eq_64(out_no_amount, in_no_amount));
-                            assert!(
-                                jet::eq_64(
-                                    safe_add(out_collateral_amount, delta_out),
-                                    in_collateral_amount
-                                )
-                            );
-                        },
                     };
-                },
-                true => {
-                    assert!(jet::eq_64(delta_out, traded_lots));
-                    assert!(jet::eq_64(safe_add(out_yes_amount, delta_out), in_yes_amount));
-                    assert!(jet::eq_64(out_no_amount, in_no_amount));
-                    assert!(
-                        jet::eq_64(safe_add(in_collateral_amount, delta_in), out_collateral_amount)
-                    );
                 },
             };
         },
@@ -566,12 +566,12 @@ fn lmsr_primary_main(
             assert!(jet::eq_1(<bool>::into(yes_increases), <bool>::into(no_increases)));
 
             let yes_delta_abs: u64 = match yes_increases {
-                false => safe_subtract(in_yes_amount, out_yes_amount),
                 true => safe_subtract(out_yes_amount, in_yes_amount),
+                false => safe_subtract(in_yes_amount, out_yes_amount),
             };
             let no_delta_abs: u64 = match no_increases {
-                false => safe_subtract(in_no_amount, out_no_amount),
                 true => safe_subtract(out_no_amount, in_no_amount),
+                false => safe_subtract(in_no_amount, out_no_amount),
             };
             assert!(jet::eq_64(yes_delta_abs, no_delta_abs));
         },
@@ -625,7 +625,7 @@ fn lmsr_secondary_main(in_base: u32) {
 
     // Own asset must match the slot role.
     match is_no_slot {
-        false => assert!(jet::eq_256(get_input_explicit_asset(ci), param::COLLATERAL_ASSET_ID)),
         true => assert!(jet::eq_256(get_input_explicit_asset(ci), param::NO_ASSET_ID)),
+        false => assert!(jet::eq_256(get_input_explicit_asset(ci), param::COLLATERAL_ASSET_ID)),
     };
 }
