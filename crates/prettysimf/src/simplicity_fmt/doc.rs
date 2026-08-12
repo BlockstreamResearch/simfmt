@@ -1,4 +1,5 @@
 use crate::simplicity_fmt::core::{Context, SyntaxKind, Trivia};
+
 use either::Either;
 use pretty::RcDoc;
 use simplicityhl::error::Span;
@@ -10,7 +11,7 @@ use simplicityhl::parse::{
 use simplicityhl::pattern::Pattern;
 use simplicityhl::types::{AliasedType, TypeDeconstructible};
 
-pub trait Doc {
+pub(super) trait Doc {
     fn to_doc<'src>(&self, context: &mut Context<'_>) -> Option<RcDoc<'src>>;
 }
 
@@ -43,8 +44,7 @@ impl Doc for Program {
         let first_start = items
             .first()
             .and_then(|item| item.span())
-            .map(|span| span.start)
-            .unwrap_or(context.source.len());
+            .map_or(context.source.len(), |span| span.start);
 
         let prefix = context
             .source
@@ -131,7 +131,7 @@ fn line_break_count(source: &str) -> usize {
     count
 }
 
-fn append_hardlines<'src>(mut doc: RcDoc<'src>, count: usize) -> RcDoc<'src> {
+fn append_hardlines(mut doc: RcDoc<'_>, count: usize) -> RcDoc<'_> {
     for _ in 0..count.min(2) {
         doc = doc.append(RcDoc::hardline());
     }
@@ -210,6 +210,7 @@ fn gap_doc<'src>(context: &mut Context<'_>, start: usize, end: usize, layout: Ga
     let last_is_line = comments.last().is_some_and(Trivia::is_line_comment);
     let trailing_newlines = line_break_count(context.source.get(cursor..end).unwrap_or_default());
 
+    #[allow(clippy::match_same_arms)]
     match layout {
         GapLayout::Leading if trailing_newlines >= 2 => doc.append(RcDoc::hardline()).append(RcDoc::hardline()),
         GapLayout::Leading => doc.append(RcDoc::hardline()),
@@ -228,6 +229,7 @@ fn gap_doc<'src>(context: &mut Context<'_>, start: usize, end: usize, layout: Ga
 }
 
 fn default_gap_doc<'src>(layout: GapLayout, newline_count: usize) -> RcDoc<'src> {
+    #[allow(clippy::match_same_arms)]
     match layout {
         GapLayout::Leading => RcDoc::nil(),
         GapLayout::BeforeToken => RcDoc::nil(),
@@ -286,7 +288,7 @@ fn gap_before_closing_delimiter<'src>(context: &mut Context<'_>, start: usize, c
 impl Doc for Visibility {
     fn to_doc<'src>(&self, _context: &mut Context<'_>) -> Option<RcDoc<'src>> {
         match self {
-            Visibility::Public => Some(RcDoc::text("pub ")),
+            Visibility::Public => Some(RcDoc::text("pub(super) ")),
             Visibility::Private => Some(RcDoc::nil()),
         }
     }
@@ -373,7 +375,7 @@ fn delimited_docs<'src>(
         let doc = RcDoc::text(open_text)
             .append(
                 gap_doc(context, open.end, close.start, GapLayout::SoftEmpty)
-                    .nest(context.config.indent_width as isize),
+                    .nest(context.config.indent_width.cast_signed()),
             )
             .append(RcDoc::text(close_text));
         return if should_group { doc.group() } else { doc };
@@ -386,7 +388,7 @@ fn delimited_docs<'src>(
         .append(gap_before_closing_delimiter(context, last_end, close.start));
 
     let doc = RcDoc::text(open_text)
-        .append(inner.nest(context.config.indent_width as isize))
+        .append(inner.nest(context.config.indent_width.cast_signed()))
         .append(RcDoc::text(close_text));
     if should_group { doc.group() } else { doc }
 }
@@ -446,7 +448,7 @@ impl Doc for UseDecl {
                 RcDoc::text("{")
                     .append(RcDoc::line_())
                     .append(RcDoc::intersperse(docs, RcDoc::text(",").append(RcDoc::line())))
-                    .nest(context.config.indent_width as isize)
+                    .nest(context.config.indent_width.cast_signed())
                     .append(RcDoc::line_())
                     .append(RcDoc::text("}"))
                     .group()
@@ -507,7 +509,7 @@ impl Doc for EnumDeclaration {
                 RcDoc::text("{")
                     .append(
                         gap_doc(context, open.end, close.start, GapLayout::Line)
-                            .nest(context.config.indent_width as isize),
+                            .nest(context.config.indent_width.cast_signed()),
                     )
                     .append(RcDoc::text("}"))
             } else {
@@ -553,7 +555,7 @@ impl Doc for EnumDeclaration {
 
             inner = inner.append(gap_doc(context, previous_end, close.start, GapLayout::Line));
             RcDoc::text("{")
-                .append(inner.nest(context.config.indent_width as isize))
+                .append(inner.nest(context.config.indent_width.cast_signed()))
                 .append(RcDoc::text("}"))
         };
 
@@ -584,7 +586,7 @@ impl Doc for EnumVariant {
             name.append(RcDoc::text("("))
                 .append(RcDoc::line_())
                 .append(RcDoc::intersperse(payload?, RcDoc::text(",").append(RcDoc::line())))
-                .nest(context.config.indent_width as isize)
+                .nest(context.config.indent_width.cast_signed())
                 .append(RcDoc::line_())
                 .append(RcDoc::text(")"))
                 .group(),
@@ -620,7 +622,7 @@ impl Doc for Module {
                 RcDoc::text("{")
                     .append(
                         gap_doc(context, open.end, close.start, GapLayout::Line)
-                            .nest(context.config.indent_width as isize),
+                            .nest(context.config.indent_width.cast_signed()),
                     )
                     .append(RcDoc::text("}"))
             } else {
@@ -638,7 +640,7 @@ impl Doc for Module {
             }
             inner = inner.append(gap_doc(context, previous_end, close.start, GapLayout::Line));
             RcDoc::text("{")
-                .append(inner.nest(context.config.indent_width as isize))
+                .append(inner.nest(context.config.indent_width.cast_signed()))
                 .append(RcDoc::text("}"))
         };
 
@@ -692,7 +694,7 @@ impl Doc for Expression {
                         RcDoc::text("{")
                             .append(
                                 gap_doc(context, open.end, close.start, GapLayout::Line)
-                                    .nest(context.config.indent_width as isize),
+                                    .nest(context.config.indent_width.cast_signed()),
                             )
                             .append(RcDoc::text("}")),
                     );
@@ -711,7 +713,7 @@ impl Doc for Expression {
 
                 Some(
                     RcDoc::text("{")
-                        .append(inner.nest(context.config.indent_width as isize))
+                        .append(inner.nest(context.config.indent_width.cast_signed()))
                         .append(RcDoc::text("}")),
                 )
             }
@@ -800,7 +802,7 @@ impl Doc for AliasedType {
                     .append(left.to_doc(context)?)
                     .append(RcDoc::text(",").append(RcDoc::line()))
                     .append(right.to_doc(context)?)
-                    .nest(context.config.indent_width as isize)
+                    .nest(context.config.indent_width.cast_signed())
                     .append(RcDoc::line_())
                     .append(RcDoc::text(">"))
                     .group(),
@@ -811,7 +813,7 @@ impl Doc for AliasedType {
                 RcDoc::text("Option<")
                     .append(RcDoc::line_())
                     .append(inner.to_doc(context)?)
-                    .nest(context.config.indent_width as isize)
+                    .nest(context.config.indent_width.cast_signed())
                     .append(RcDoc::line_())
                     .append(RcDoc::text(">"))
                     .group(),
@@ -830,7 +832,7 @@ impl Doc for AliasedType {
                     .append(
                         RcDoc::line_()
                             .append(elements_doc)
-                            .nest(context.config.indent_width as isize),
+                            .nest(context.config.indent_width.cast_signed()),
                     )
                     .append(RcDoc::line_())
                     .append(RcDoc::text(")"))
@@ -845,7 +847,7 @@ impl Doc for AliasedType {
                     .append(element.to_doc(context)?)
                     .append(RcDoc::text("; "))
                     .append(RcDoc::text(size))
-                    .nest(context.config.indent_width as isize)
+                    .nest(context.config.indent_width.cast_signed())
                     .append(RcDoc::line_())
                     .append(RcDoc::text("]"))
                     .group(),
@@ -861,7 +863,7 @@ impl Doc for AliasedType {
                     .append(element.to_doc(context)?)
                     .append(RcDoc::text(", "))
                     .append(RcDoc::text(bound))
-                    .nest(context.config.indent_width as isize)
+                    .nest(context.config.indent_width.cast_signed())
                     .append(RcDoc::line_())
                     .append(RcDoc::text(">"))
                     .group(),
@@ -890,7 +892,7 @@ impl Doc for Pattern {
                         .append(
                             RcDoc::line_()
                                 .append(RcDoc::intersperse(docs?, RcDoc::text(",").append(RcDoc::line())))
-                                .nest(context.config.indent_width as isize),
+                                .nest(context.config.indent_width.cast_signed()),
                         )
                         .append(RcDoc::line_())
                         .append(RcDoc::text(")")),
@@ -907,7 +909,7 @@ impl Doc for Pattern {
                         .append(
                             RcDoc::line_()
                                 .append(RcDoc::intersperse(docs?, RcDoc::text(",").append(RcDoc::line())))
-                                .nest(context.config.indent_width as isize),
+                                .nest(context.config.indent_width.cast_signed()),
                         )
                         .append(RcDoc::line_())
                         .append(RcDoc::text("]")),
@@ -1085,14 +1087,7 @@ impl Doc for Match {
             .last_in(SyntaxKind::RBrace, open.end, span.end)
             .copied()?;
 
-        let (left_arm, right_arm) = match self.left().pattern() {
-            MatchPattern::Left(_, _) => (self.left(), self.right()),
-            MatchPattern::Right(_, _) => (self.left(), self.right()),
-            MatchPattern::None => (self.right(), self.left()),
-            MatchPattern::Some(_, _) => (self.left(), self.right()),
-            MatchPattern::False => (self.right(), self.left()),
-            MatchPattern::True => (self.left(), self.right()),
-        };
+        let (left_arm, right_arm) = (self.left(), self.right());
 
         let left = SpannedDoc {
             span: *left_arm.span(),
@@ -1103,7 +1098,7 @@ impl Doc for Match {
             doc: right_arm.to_doc(context)?.append(RcDoc::text(",")),
         };
         let body = if left.span.start < right.span.start {
-            match_body_doc(context, open, close, vec![left, right])?
+            match_body_doc(context, open, close, &[left, right])?
         } else {
             // TODO(comments): option/bool arms are reordered canonically.
             // Inter-arm comments cannot follow that reorder safely until trivia
@@ -1113,7 +1108,7 @@ impl Doc for Match {
                 .append(left.doc)
                 .append(RcDoc::hardline())
                 .append(right.doc)
-                .nest(context.config.indent_width as isize)
+                .nest(context.config.indent_width.cast_signed())
                 .append(RcDoc::hardline())
                 .append(RcDoc::text("}"))
         };
@@ -1158,7 +1153,7 @@ impl Doc for EnumMatch {
         let body = if arms.is_empty() {
             RcDoc::text("{}")
         } else {
-            match_body_doc(context, open, close, arms)?
+            match_body_doc(context, open, close, &arms)?
         };
 
         Some(
@@ -1179,7 +1174,7 @@ fn match_body_doc<'src>(
     context: &mut Context<'_>,
     open: Span,
     close: Span,
-    arms: Vec<SpannedDoc<'src>>,
+    arms: &[SpannedDoc<'src>],
 ) -> Option<RcDoc<'src>> {
     let first = arms.first()?;
     let mut inner = gap_doc(context, open.end, first.span.start, GapLayout::Line).append(first.doc.clone());
@@ -1193,7 +1188,7 @@ fn match_body_doc<'src>(
     inner = inner.append(gap_doc(context, previous_end, close.start, GapLayout::Line));
     Some(
         RcDoc::text("{")
-            .append(inner.nest(context.config.indent_width as isize))
+            .append(inner.nest(context.config.indent_width.cast_signed()))
             .append(RcDoc::text("}")),
     )
 }
@@ -1290,7 +1285,7 @@ impl Doc for EnumMatchArm {
                 .append(RcDoc::text("("))
                 .append(RcDoc::line_())
                 .append(RcDoc::intersperse(bindings?, RcDoc::text(",").append(RcDoc::line())))
-                .nest(context.config.indent_width as isize)
+                .nest(context.config.indent_width.cast_signed())
                 .append(RcDoc::line_())
                 .append(RcDoc::text(")"))
                 .group();
@@ -1330,7 +1325,7 @@ fn match_arm_body<'src>(expression: &Expression, context: &mut Context<'_>) -> O
             RcDoc::text("{")
                 .append(RcDoc::hardline())
                 .append(expression_doc.clone())
-                .nest(context.config.indent_width as isize)
+                .nest(context.config.indent_width.cast_signed())
                 .append(RcDoc::hardline())
                 .append(RcDoc::text("}"))
                 .flat_alt(expression_doc),

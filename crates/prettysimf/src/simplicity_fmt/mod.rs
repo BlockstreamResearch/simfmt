@@ -1,3 +1,5 @@
-pub mod core;
-pub mod doc;
-pub mod fmt;
+mod core;
+mod doc;
+mod fmt;
+
+pub(crate) use fmt::format_program;

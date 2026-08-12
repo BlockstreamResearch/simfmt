@@ -21,7 +21,7 @@ where
     fn ensure_real_path(filename: &FileName) -> &Path {
         match *filename {
             FileName::Real(ref path) => path,
-            _ => panic!("cannot format `{filename}` and emit to files"),
+            FileName::Stdin => panic!("cannot format `{filename}` and emit to files"),
         }
     }
 

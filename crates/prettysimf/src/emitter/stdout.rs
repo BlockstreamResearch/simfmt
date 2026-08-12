@@ -1,4 +1,5 @@
-use super::*;
+use super::{Emitter, EmitterResult, FormattedFile, Write, io};
+
 use crate::utils::Verbosity;
 
 #[derive(Debug)]

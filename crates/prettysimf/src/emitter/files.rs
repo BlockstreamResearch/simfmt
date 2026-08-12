@@ -1,4 +1,5 @@
-use super::*;
+use super::{Emitter, EmitterResult, FormattedFile, Write, ensure_real_path, io};
+
 use std::fs;
 
 #[derive(Debug, Default)]

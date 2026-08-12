@@ -1,11 +1,40 @@
-use anyhow::{Context, Error, anyhow, bail};
-use prettysimf::config::{FmtConfig, PartialConfig};
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
+
+use prettysimf::driver::{FmtConfig, PartialConfig};
 
 /// Defines acceptable names for configuration discovery
 const CONFIG_FILE_NAMES: [&str; 2] = [".simfmt.toml", "simfmt.toml"];
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum ConfigError {
+    #[error("unable to find config file for path `{0}`")]
+    Missing(PathBuf),
+    #[error("unable to find a simfmt config file in `{0}`")]
+    MissingInDirectory(PathBuf),
+    #[error("failed to access `{path}`: {source}")]
+    Io {
+        path: PathBuf,
+        #[source]
+        source: io::Error,
+    },
+    #[error("invalid config `{path}`: {source}")]
+    Invalid {
+        path: PathBuf,
+        #[source]
+        source: toml::de::Error,
+    },
+    #[error("config file is not a TOML table: `{0}`")]
+    NotTable(PathBuf),
+}
+
+fn io_error(path: &Path, source: io::Error) -> ConfigError {
+    ConfigError::Io {
+        path: path.to_path_buf(),
+        source,
+    }
+}
 
 fn home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME")
@@ -20,13 +49,18 @@ fn config_dir() -> Option<PathBuf> {
 }
 
 // Find known config file names (`.simfmt.toml`, `simfmt.toml`) in `dir`
-fn get_toml_path(dir: &Path) -> Result<Option<PathBuf>, std::io::Error> {
+fn get_toml_path(dir: &Path) -> Result<Option<PathBuf>, ConfigError> {
     for config_file_name in &CONFIG_FILE_NAMES {
         let config_file = dir.join(config_file_name);
         match fs::metadata(&config_file) {
-            Ok(ref md) if md.is_file() => return Ok(Some(config_file.canonicalize()?)),
+            Ok(ref md) if md.is_file() => {
+                return config_file
+                    .canonicalize()
+                    .map(Some)
+                    .map_err(|source| io_error(&config_file, source));
+            }
             Err(e) if !matches!(e.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) => {
-                return Err(e);
+                return Err(io_error(&config_file, e));
             }
             _ => {}
         }
@@ -40,14 +74,16 @@ fn get_toml_path(dir: &Path) -> Result<Option<PathBuf>, std::io::Error> {
 /// 1. Starts from the current `dir` and recursively checking parent directories.
 /// 2. Checks home directory via `HOME` env or `USERPROFILE` for file existence.
 /// 3. Checks `XDG_CONFIG_HOME` env for file existence.
-pub fn resolve_project_file(dir: &Path) -> Result<Option<PathBuf>, Error> {
+fn resolve_project_file(dir: &Path) -> Result<Option<PathBuf>, ConfigError> {
     let mut current = if dir.is_relative() {
-        std::env::current_dir()?.join(dir)
+        std::env::current_dir()
+            .map_err(|source| io_error(dir, source))?
+            .join(dir)
     } else {
         dir.to_path_buf()
     };
 
-    current = fs::canonicalize(current)?;
+    current = fs::canonicalize(&current).map_err(|source| io_error(&current, source))?;
 
     loop {
         if let Some(path) = get_toml_path(&current)? {
@@ -75,32 +111,28 @@ pub fn resolve_project_file(dir: &Path) -> Result<Option<PathBuf>, Error> {
     Ok(None)
 }
 
-fn resolve_explicit_config_path(path: &Path) -> Result<PathBuf, Error> {
+fn resolve_explicit_config_path(path: &Path) -> Result<PathBuf, ConfigError> {
     if !path.exists() {
-        bail!(
-            "Error: unable to find config file for the given path: `{}`",
-            path.display()
-        );
+        return Err(ConfigError::Missing(path.to_path_buf()));
     }
 
     if path.is_dir() {
-        get_toml_path(path)?
-            .ok_or_else(|| anyhow!("Error: unable to find a simfmt config file in `{}`", path.display()))
+        get_toml_path(path)?.ok_or_else(|| ConfigError::MissingInDirectory(path.to_path_buf()))
     } else {
-        path.canonicalize()
-            .with_context(|| format!("Failed to canonicalize config path: {}", path.display()))
+        path.canonicalize().map_err(|source| io_error(path, source))
     }
 }
 
-fn read_config(path: &Path) -> Result<PartialConfig, Error> {
-    let toml_str =
-        fs::read_to_string(path).with_context(|| format!("Failed to read config file: {}", path.display()))?;
+fn read_config(path: &Path) -> Result<PartialConfig, ConfigError> {
+    let toml_str = fs::read_to_string(path).map_err(|source| io_error(path, source))?;
 
-    let parsed: toml::Value = toml::from_str(&toml_str)
-        .with_context(|| format!("Failed to parse TOML in config file: {}", path.display()))?;
+    let parsed: toml::Value = toml::from_str(&toml_str).map_err(|source| ConfigError::Invalid {
+        path: path.to_path_buf(),
+        source,
+    })?;
 
     let Some(table) = parsed.as_table() else {
-        bail!("Config file is not a TOML table: {}", path.display());
+        return Err(ConfigError::NotTable(path.to_path_buf()));
     };
 
     for key in table.keys() {
@@ -109,16 +141,19 @@ fn read_config(path: &Path) -> Result<PartialConfig, Error> {
         }
     }
 
-    toml::from_str(&toml_str).with_context(|| format!("Failed to parse config values in: {}", path.display()))
+    toml::from_str(&toml_str).map_err(|source| ConfigError::Invalid {
+        path: path.to_path_buf(),
+        source,
+    })
 }
 
 /// Loads a config using an explicit config path when supplied, otherwise searching from the input path.
 /// Command line overrides are applied last.
-pub fn load_config(
+pub(crate) fn load_config(
     input_path: Option<&Path>,
     explicit_config_path: Option<&Path>,
     options_override: Option<PartialConfig>,
-) -> Result<(FmtConfig, Option<PathBuf>), Error> {
+) -> Result<(FmtConfig, Option<PathBuf>), ConfigError> {
     let mut final_config = FmtConfig::default();
     let mut resolved_path = None;
 
@@ -150,9 +185,12 @@ pub fn load_config(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use prettysimf::config::{Color, NewlineStyle};
-    use prettysimf::utils::{EmitMode, Verbosity};
+    use prettysimf::NewlineStyle;
+    use prettysimf::driver::{Color, EmitMode, Verbosity};
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    static NEXT_TEST_DIRECTORY: AtomicUsize = AtomicUsize::new(0);
 
     struct TestDirectory(PathBuf);
 
@@ -162,7 +200,11 @@ mod tests {
                 .duration_since(UNIX_EPOCH)
                 .expect("system clock is before the Unix epoch")
                 .as_nanos();
-            let path = std::env::temp_dir().join(format!("simfmt-config-test-{}-{timestamp}", std::process::id()));
+            let sequence = NEXT_TEST_DIRECTORY.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir().join(format!(
+                "simfmt-config-test-{}-{timestamp}-{sequence}",
+                std::process::id()
+            ));
             fs::create_dir_all(&path).unwrap();
             Self(path)
         }
@@ -281,11 +323,7 @@ mod tests {
 
         let error = load_config(None, Some(&missing), None).unwrap_err();
 
-        assert!(
-            error
-                .to_string()
-                .contains("Error: unable to find config file for the given path")
-        );
+        assert!(error.to_string().contains("unable to find config file for path"));
         assert!(error.to_string().contains(&missing.display().to_string()));
     }
 
@@ -297,11 +335,7 @@ mod tests {
 
         let error = load_config(None, Some(&empty), None).unwrap_err();
 
-        assert!(
-            error
-                .to_string()
-                .contains("Error: unable to find a simfmt config file in")
-        );
+        assert!(error.to_string().contains("unable to find a simfmt config file in"));
         assert!(error.to_string().contains(&empty.display().to_string()));
     }
 
@@ -313,7 +347,7 @@ mod tests {
 
         let error = load_config(None, Some(&config_path), None).unwrap_err();
 
-        assert!(error.to_string().contains("Failed to parse TOML in config file"));
+        assert!(error.to_string().contains("invalid config"));
         assert!(error.to_string().contains(&config_path.display().to_string()));
     }
 
@@ -325,7 +359,7 @@ mod tests {
 
         let error = load_config(None, Some(&config_path), None).unwrap_err();
 
-        assert!(error.to_string().contains("Failed to parse config values in"));
+        assert!(error.to_string().contains("invalid config"));
         assert!(error.to_string().contains(&config_path.display().to_string()));
     }
 }

@@ -1,25 +1,25 @@
-use crate::config::FmtConfig;
-use crate::emitter::Emitter;
-use crate::error::ErrorKind;
-use crate::fmt_processor::{FormatContext, FormatHandler, RawFormatContext, ReportedErrors, SourceFile};
-use crate::reporter::{FormatReport, FormatReportFormatterBuilder};
-use crate::source_file;
-use crate::utils::{FileName, Input, Timer, should_emit_verbose};
 use std::io;
 use std::io::Write;
 use std::sync::Arc;
 
-/// A session is a run of simfmt across a single or multiple inputs.
-pub struct Session<'b, T: Write> {
-    pub config: FmtConfig,
-    pub out: Option<&'b mut T>,
-    pub(crate) errors: ReportedErrors,
-    source_file: SourceFile,
+use crate::config::{FmtConfig, PartialConfig};
+use crate::emitter::Emitter;
+use crate::error::ErrorKind;
+use crate::fmt_processor::{FormatContext, FormatHandler, RawFormatContext, ReportedErrors};
+use crate::reporter::{FormatReport, FormatReportFormatterBuilder};
+use crate::source_file;
+use crate::utils::{FileName, FormatInput, Timer, should_emit_verbose};
+
+/// A session is a run of simfmt across single or multiple inputs.
+pub struct FormatterSession<'b, T: Write> {
+    config: FmtConfig,
+    out: Option<&'b mut T>,
+    errors: ReportedErrors,
     emitter: Box<dyn Emitter + 'b>,
 }
 
 pub(crate) fn format_project<T: FormatHandler>(
-    input: Input,
+    input: FormatInput,
     config: &FmtConfig,
     handler: &mut T,
 ) -> Result<FormatReport, ErrorKind> {
@@ -37,7 +37,7 @@ pub(crate) fn format_project<T: FormatHandler>(
     let raw_ctx = RawFormatContext::new(input)?;
 
     // Format file
-    should_emit_verbose(input_is_stdin, config, || println!("Formatting {}", main_file));
+    should_emit_verbose(input_is_stdin, config, || println!("Formatting {main_file}"));
     context.format_file(raw_ctx)?;
 
     timer = timer.done_formatting();
@@ -47,14 +47,14 @@ pub(crate) fn format_project<T: FormatHandler>(
             "Spent {0:.3} secs in the parsing phase, and {1:.3} secs in the formatting phase",
             timer.get_parse_time(),
             timer.get_format_time(),
-        )
+        );
     });
 
     Ok(context.report)
 }
 
-impl<'b, T: Write + 'b> Session<'b, T> {
-    pub(crate) fn format_input_inner(&mut self, input: Input) -> Result<FormatReport, ErrorKind> {
+impl<'b, T: Write + 'b> FormatterSession<'b, T> {
+    pub(crate) fn format_input_inner(&mut self, input: FormatInput) -> Result<FormatReport, ErrorKind> {
         let config = self.config.clone();
         let format_result = format_project(input, &config, self);
         self.config.record_used_options(&config.used_options());
@@ -65,7 +65,7 @@ impl<'b, T: Write + 'b> Session<'b, T> {
     }
 }
 
-impl<'b, T: Write + 'b> FormatHandler for Session<'b, T> {
+impl<'b, T: Write + 'b> FormatHandler for FormatterSession<'b, T> {
     // Called for each formatted file.
     fn handle_formatted_file(
         &mut self,
@@ -92,74 +92,88 @@ impl<'b, T: Write + 'b> FormatHandler for Session<'b, T> {
                 _ => {}
             }
         }
-
-        self.source_file.push((path, result));
         Ok(())
     }
 }
 
-impl<'b, T: Write + 'b> Session<'b, T> {
-    pub fn new(config: FmtConfig, mut out: Option<&'b mut T>) -> Session<'b, T> {
+impl<'b, T: Write + 'b> FormatterSession<'b, T> {
+    /// Creates a formatter session with resolved configuration and optional output.
+    pub fn new(config: FmtConfig, mut out: Option<&'b mut T>) -> FormatterSession<'b, T> {
         let emitter = config.emit_mode().create_emitter(&config.get_emitter_conf());
 
         if let Some(ref mut out) = out {
             let _ = emitter.emit_header(out);
         }
 
-        Session {
+        FormatterSession {
             config,
             out,
             emitter,
             errors: ReportedErrors::default(),
-            source_file: vec![],
         }
     }
 
     /// The main entry point for Rustfmt. Formats the given input according to the
     /// given config. `out` is only necessary if required by the configuration.
-    pub fn format(&mut self, input: Input) -> Result<FormatReport, ErrorKind> {
+    pub(crate) fn format(&mut self, input: FormatInput) -> Result<FormatReport, ErrorKind> {
         self.format_input_inner(input)
     }
 
-    pub fn add_operational_error(&mut self) {
-        self.errors.has_operational_errors = true;
+    /// Returns the configuration options consulted during this session.
+    #[must_use]
+    pub fn used_options(&self) -> PartialConfig {
+        self.config.used_options()
     }
 
-    pub fn has_operational_errors(&self) -> bool {
+    /// Returns whether an input/output operation failed.
+    #[must_use]
+    fn has_operational_errors(&self) -> bool {
         self.errors.has_operational_errors
     }
 
-    pub fn has_parsing_errors(&self) -> bool {
+    /// Returns whether parsing failed for any input.
+    #[must_use]
+    fn has_parsing_errors(&self) -> bool {
         self.errors.has_parsing_errors
     }
 
-    pub fn has_formatting_errors(&self) -> bool {
+    /// Returns whether valid source could not be formatted.
+    #[must_use]
+    fn has_formatting_errors(&self) -> bool {
         self.errors.has_formatting_errors
     }
 
-    pub fn has_check_errors(&self) -> bool {
+    /// Returns whether an opt-in formatter check failed.
+    #[must_use]
+    fn has_check_errors(&self) -> bool {
         self.errors.has_check_errors
     }
 
-    pub fn has_diff(&self) -> bool {
+    /// Returns whether formatted output differs from the input.
+    #[must_use]
+    fn has_diff(&self) -> bool {
         self.errors.has_diff
     }
 
-    pub fn has_unformatted_code_errors(&self) -> bool {
+    /// Returns whether formatting could not preserve all source content.
+    #[must_use]
+    fn has_unformatted_code_errors(&self) -> bool {
         self.errors.has_unformatted_code_errors
     }
 
+    /// Returns whether no detailed error category was recorded.
+    #[must_use]
     pub fn has_no_errors(&self) -> bool {
         !(self.has_operational_errors()
             || self.has_parsing_errors()
             || self.has_formatting_errors()
             || self.has_check_errors()
             || self.has_diff()
-            || self.has_unformatted_code_errors()
-            || self.errors.has_macro_format_failure)
+            || self.has_unformatted_code_errors())
     }
 
-    pub fn format_and_emit_report(&mut self, input: Input) {
+    /// Formats one input, emits its report, and records detailed error state.
+    pub fn format_and_emit_report(&mut self, input: FormatInput) {
         match self.format(input) {
             Ok(report) => {
                 if report.has_warnings() {
@@ -178,14 +192,18 @@ impl<'b, T: Write + 'b> Session<'b, T> {
         }
     }
 
-    pub fn should_print_with_colors(&self) -> bool {
+    fn add_operational_error(&mut self) {
+        self.errors.has_operational_errors = true;
+    }
+
+    fn should_print_with_colors(&self) -> bool {
         term::stderr().is_some_and(|t| {
             self.config.color().use_colored_tty() && t.supports_color() && t.supports_attr(term::Attr::Bold)
         })
     }
 }
 
-impl<'b, T: Write + 'b> Drop for Session<'b, T> {
+impl<'b, T: Write + 'b> Drop for FormatterSession<'b, T> {
     fn drop(&mut self) {
         if let Some(ref mut out) = self.out {
             let _ = self.emitter.emit_footer(out);

@@ -2,9 +2,14 @@ use crate::config::InnerFmtConfig;
 use crate::error::ErrorKind;
 use crate::simplicity_fmt::core::Context;
 use crate::simplicity_fmt::doc::Doc;
+
 use simplicityhl::parse::ParsedSource;
 
-pub fn format_program(parsed: &ParsedSource<'_>, source: &str, config: &InnerFmtConfig) -> Result<String, ErrorKind> {
+pub(crate) fn format_program(
+    parsed: &ParsedSource<'_>,
+    source: &str,
+    config: &InnerFmtConfig,
+) -> Result<String, ErrorKind> {
     let mut context = Context::new(config, source, parsed.tokens(), parsed.prefix().end);
 
     let doc = parsed
@@ -107,11 +112,11 @@ mod tests {
         }
 
         pub(super) fn assert_formatting_stable(source: &str, expected: &str) {
-            assert_formatting(source, expected, &UnstableFeatures::none())
+            assert_formatting(source, expected, &UnstableFeatures::none());
         }
 
         pub(super) fn assert_formatting_unstable(source: &str, expected: &str) {
-            assert_formatting(source, expected, &UnstableFeatures::all())
+            assert_formatting(source, expected, &UnstableFeatures::all());
         }
 
         pub(super) fn assert_formatting_in_all_modes(source: &str, expected: &str) {
@@ -119,9 +124,13 @@ mod tests {
             assert_formatting_unstable(source, expected);
         }
 
-        pub(super) fn assert_formatting_in_all_modes_with_config(source: &str, expected: &str, config: InnerFmtConfig) {
-            assert_formatting_with_config(source, expected, &UnstableFeatures::none(), &config);
-            assert_formatting_with_config(source, expected, &UnstableFeatures::all(), &config);
+        pub(super) fn assert_formatting_in_all_modes_with_config(
+            source: &str,
+            expected: &str,
+            config: &InnerFmtConfig,
+        ) {
+            assert_formatting_with_config(source, expected, &UnstableFeatures::none(), config);
+            assert_formatting_with_config(source, expected, &UnstableFeatures::all(), config);
         }
 
         fn parse_with<'src>(source: &'src str, features: &UnstableFeatures) -> ParsedSource<'src> {
@@ -154,11 +163,11 @@ mod tests {
         }
 
         pub(super) fn assert_idempotent_stable(formatted: &str) {
-            assert_idempotent_with(formatted, &UnstableFeatures::none())
+            assert_idempotent_with(formatted, &UnstableFeatures::none());
         }
 
         pub(super) fn assert_idempotent_unstable(formatted: &str) {
-            assert_idempotent_with(formatted, &UnstableFeatures::all())
+            assert_idempotent_with(formatted, &UnstableFeatures::all());
         }
 
         fn assert_idempotent_with(formatted: &str, features: &UnstableFeatures) {
@@ -189,7 +198,7 @@ mod tests {
 
     #[test]
     fn preserves_comments_in_match() {
-        let source = r#"fn main() {
+        let source = "fn main() {
     match witness::PATH /* before match body */ {
         // before arm
         Left(x: u1) => /* after arrow */ {
@@ -199,7 +208,7 @@ mod tests {
         Right(x: u2) => x,
     }
     // after match
-}"#;
+}";
 
         utils::assert_comments_preserved(
             source,
@@ -216,14 +225,14 @@ mod tests {
 
     #[test]
     fn comments_are_docs_while_surrounding_syntax_is_formatted() {
-        let source = r#"// leading
+        let source = "// leading
 fn   comments(a: u8, /* between parameters */ b: u8) /* before return arrow */ -> u8 {
 let x: u8 = /* after equals */ add(a, /* between arguments */ b); // after statement
 // before trailing expression
 list![x, /* between elements */ b,]
 }
 // eof
-"#;
+";
         let formatted = utils::format_source_stable(source);
 
         for comment in [
@@ -320,7 +329,7 @@ list![x, /* between elements */ b,]
 
     #[test]
     fn long_preserved_source_fragments_do_not_change_following_layout() {
-        let aliases = r#"// Binary LMSR Pool Covenant (Unified Source)
+        let aliases = "// Binary LMSR Pool Covenant (Unified Source)
 // SimplicityHL contract for Liquid.
 //
 // This source defines both leaf entry functions:
@@ -330,16 +339,16 @@ list![x, /* between elements */ b,]
 // `main` wrappers are appended per-leaf by Rust compilation code.
 
 type PathPrimary = Either<(), ()>;
-type ScanPayload = (u32, (u64, (u64, u8)));"#;
+type ScanPayload = (u32, (u64, (u64, u8)));";
         utils::assert_formatting_in_all_modes(aliases, aliases);
 
-        let commented_function = r#"fn preserved() -> bool {
+        let commented_function = "fn preserved() -> bool {
     // This deliberately long preserved comment keeps the whole function on the source-aware formatting path.
     true
 }
 fn compact(bit: bool) -> bool {
     bit
-}"#;
+}";
         utils::assert_formatting_in_all_modes(commented_function, commented_function);
 
         let prefixed = r#"// This deliberately long prefix must not consume the pretty-printer column budget for the following item.
@@ -389,12 +398,12 @@ fn main(value: Action) {
         let expected = r"fn main(value: Option<bool>, flag: bool) {
     let next: Option<bool> = Some(true);
     match value {
-        Some(inner: bool) => Some(inner),
         None => panic!(),
+        Some(inner: bool) => Some(inner),
     };
     match flag {
-        true => true,
         false => false,
+        true => true,
     }
 }";
 
@@ -411,12 +420,12 @@ fn main(value: Action) {
 
     #[test]
     fn wraps_long_tuple_and_array_patterns_with_their_bindings() {
-        let source = r#"
+        let source = "
 fn main(protocol_fee_vault_indexes: (u32, u32), protocol_fee_vault_array_indexes: [u32; 2]) {
     let (protocol_fee_vault_input_index, protocol_fee_vault_output_index): (u32, u32) = protocol_fee_vault_indexes;
     let [protocol_fee_vault_input_index, protocol_fee_vault_output_index]: [u32; 2] = protocol_fee_vault_array_indexes;
 }
-"#;
+";
 
         let formatted = utils::format_source_stable(source);
         assert!(formatted.contains(
@@ -431,29 +440,29 @@ fn main(protocol_fee_vault_indexes: (u32, u32), protocol_fee_vault_array_indexes
 
     #[test]
     fn preserves_blank_lines_between_block_statements() {
-        let source = r#"
+        let source = "
 fn main() {
     let first: u32 = 1;
     let second: u32 = 2;
 
     let third: u32 = 3;
 }
-"#;
+";
 
-        let expected = r#"fn main() {
+        let expected = "fn main() {
     let first: u32 = 1;
     let second: u32 = 2;
 
     let third: u32 = 3;
 }
-"#;
+";
 
         utils::assert_formatting_in_all_modes(source, expected);
     }
 
     #[test]
     fn unwraps_single_expression_match_arms_inside_commented_functions() {
-        let source = r#"
+        let source = "
 fn main() {
     // Keep this function source-aware.
     match true {
@@ -473,19 +482,19 @@ fn main() {
         }
     }
 }
-"#;
-        let expected = r#"fn main() {
+";
+        let expected = "fn main() {
     // Keep this function source-aware.
     match true {
-        true => true,
         false => false,
+        true => true,
     };
     match true {
-        true => true,
         false => false,
+        true => true,
     }
 }
-"#;
+";
 
         utils::assert_formatting_in_all_modes(source, expected);
     }
@@ -497,8 +506,8 @@ fn main() {
     false => {{safe_subtract(in_no_amount, out_no_amount)}},
 }";
         let expected = "match flag {
-    true => safe_subtract(out_no_amount, in_no_amount),
     false => safe_subtract(in_no_amount, out_no_amount),
+    true => safe_subtract(out_no_amount, in_no_amount),
 }";
 
         utils::assert_formatting_with_wrapping_in_all_modes(source, expected);
@@ -514,16 +523,16 @@ fn main() {
 }";
         let expected = "fn main(flag: bool) {
     match flag {
-        true => {
-            calculate(
-                first_argument,
-                second_argument
-            )
-        },
         false => {
             calculate(
                 second_argument,
                 first_argument
+            )
+        },
+        true => {
+            calculate(
+                first_argument,
+                second_argument
             )
         },
     }
@@ -533,12 +542,12 @@ fn main() {
             line_width: 44,
         };
 
-        utils::assert_formatting_in_all_modes_with_config(source, expected, config);
+        utils::assert_formatting_in_all_modes_with_config(source, expected, &config);
     }
 
     #[test]
     fn unwraps_empty_tuples_and_nested_matches_inside_commented_functions() {
-        let source = r#"
+        let source = "
 fn main() {
     // Keep this function source-aware.
     match true {
@@ -549,18 +558,18 @@ fn main() {
         },
     }
 }
-"#;
-        let expected = r#"fn main() {
+";
+        let expected = "fn main() {
     // Keep this function source-aware.
     match true {
-        true => match false {
-            true => true,
-            false => false,
-        },
         false => (),
+        true => match false {
+            false => false,
+            true => true,
+        },
     }
 }
-"#;
+";
 
         utils::assert_formatting_in_all_modes(source, expected);
     }
@@ -600,7 +609,7 @@ let singleton: (u8) = (1);";
             line_width: 24,
         };
 
-        utils::assert_formatting_in_all_modes_with_config(source, expected, config);
+        utils::assert_formatting_in_all_modes_with_config(source, expected, &config);
 
         let expected = "type Payload = (u32, (u64, u8));";
         let config = crate::config::InnerFmtConfig {
@@ -608,7 +617,7 @@ let singleton: (u8) = (1);";
             line_width: 100,
         };
 
-        utils::assert_formatting_in_all_modes_with_config(source, expected, config);
+        utils::assert_formatting_in_all_modes_with_config(source, expected, &config);
     }
 
     #[test]
@@ -630,14 +639,14 @@ let x: bool = match true {
     true => true,
     false => false,
 };";
-        let expected = r#"let x: bool = match true {
-    true => true,
+        let expected = "let x: bool = match true {
     false => false,
+    true => true,
 };
 let x: bool = match true {
-    true => true,
     false => false,
-};"#;
+    true => true,
+};";
 
         utils::assert_formatting_with_wrapping_in_all_modes(source, expected);
     }
@@ -645,11 +654,11 @@ let x: bool = match true {
     #[test]
     fn true_false_reordering_and_code_wrapping() {
         let source = "match true {
-    false => {{false}},
-    true => true,}";
-        let expected = "match true {
     true => true,
+    false => {{false}},}";
+        let expected = "match true {
     false => false,
+    true => true,
 }";
 
         utils::assert_formatting_with_wrapping_in_all_modes(source, expected);
@@ -658,13 +667,13 @@ let x: bool = match true {
     #[test]
     fn some_reordering_and_code_wrapping() {
         let source = "match witness::PATH {
+    Some(value: bool) => Some(value),
+    None => None,
+}";
+        let expected = "match witness::PATH {
     None => None,
     Some(value: bool) => Some(value),
 }";
-        let expected = r#"match witness::PATH {
-    Some(value: bool) => Some(value),
-    None => None,
-}"#;
 
         utils::assert_formatting_with_wrapping_in_all_modes(source, expected);
     }
@@ -697,12 +706,12 @@ let x: bool = match true {
 }";
         let expected = "match witness::PATH {
     Left(value: bool) => match value {
-        true => true,
         false => false,
+        true => true,
     },
     Right(value: bool) => match value {
-        true => true,
         false => false,
+        true => true,
     },
 }";
 
@@ -724,7 +733,7 @@ EnumValues::Four(tuple: (u8, u64)) => {
 },};
 }";
 
-        let expected = r#"enum EnumValues {
+        let expected = "enum EnumValues {
     One,
     Two(u8, bool),
     Three(List<u16, 8>, bool, u8),
@@ -742,7 +751,7 @@ fn random_fn(value: EnumValues) {
             num
         },
     };
-}"#;
+}";
         //TODO: maybe remove trailing coma for multiline MatchArm?
 
         utils::assert_formatting_unstable(source, expected);
@@ -750,12 +759,12 @@ fn random_fn(value: EnumValues) {
 
     #[test]
     fn list_trailling_coma() {
-        let source = r#"fn main() {
+        let source = "fn main() {
     let values:List<u8,4>=list![1,2,3,4,];
-}"#;
-        let expected = r#"fn main() {
+}";
+        let expected = "fn main() {
     let values: List<u8, 4> = list![1, 2, 3, 4];
-}"#;
+}";
 
         utils::assert_formatting_in_all_modes(source, expected);
     }

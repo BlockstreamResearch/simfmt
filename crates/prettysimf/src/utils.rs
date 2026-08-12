@@ -1,14 +1,16 @@
-use crate::config::{Color, FmtConfig};
-use crate::emitter;
-use crate::emitter::{Emitter, EmitterConfig};
-use serde::{Deserialize, Serialize};
-use simplicityhl::tracker::TrackerLogLevel;
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use std::{fmt, io};
+
+use crate::config::{Color, FmtConfig};
+use crate::emitter;
+use crate::emitter::{Emitter, EmitterConfig};
+
+use serde::{Deserialize, Serialize};
+use simplicityhl::tracker::TrackerLogLevel;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -57,7 +59,7 @@ impl Verbosity {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
-pub enum FileName {
+pub(crate) enum FileName {
     Real(PathBuf),
     Stdin,
 }
@@ -115,6 +117,7 @@ impl OutputWriter {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+/// Selects how a formatter driver emits successful formatting results.
 pub enum EmitMode {
     /// Emits to files.
     Files,
@@ -140,7 +143,7 @@ impl std::str::FromStr for EmitMode {
     }
 }
 
-pub fn should_emit_verbose<F>(forbid_verbose_output: bool, config: &FmtConfig, f: F)
+pub(crate) fn should_emit_verbose<F>(forbid_verbose_output: bool, config: &FmtConfig, f: F)
 where
     F: Fn(),
 {
@@ -150,7 +153,7 @@ where
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum Timer {
+pub(crate) enum Timer {
     Disabled,
     Initialized(Instant),
     DoneParsing(Instant, Instant),
@@ -158,14 +161,14 @@ pub enum Timer {
 }
 
 impl Timer {
-    pub fn start() -> Timer {
+    pub(crate) fn start() -> Timer {
         if cfg!(target_arch = "wasm32") {
             Timer::Disabled
         } else {
             Timer::Initialized(Instant::now())
         }
     }
-    pub fn done_parsing(self) -> Self {
+    pub(crate) fn done_parsing(self) -> Self {
         match self {
             Timer::Disabled => Timer::Disabled,
             Timer::Initialized(init_time) => Timer::DoneParsing(init_time, Instant::now()),
@@ -173,7 +176,7 @@ impl Timer {
         }
     }
 
-    pub fn done_formatting(self) -> Self {
+    pub(crate) fn done_formatting(self) -> Self {
         match self {
             Timer::Disabled => Timer::Disabled,
             Timer::DoneParsing(init_time, parse_time) => Timer::DoneFormatting(init_time, parse_time, Instant::now()),
@@ -182,7 +185,7 @@ impl Timer {
     }
 
     /// Returns the time it took to parse the source files in seconds.
-    pub fn get_parse_time(&self) -> f32 {
+    pub(crate) fn get_parse_time(&self) -> f32 {
         match *self {
             Timer::Disabled => panic!("this platform cannot time execution"),
             Timer::DoneParsing(init, parse_time) | Timer::DoneFormatting(init, parse_time, _) => {
@@ -195,7 +198,7 @@ impl Timer {
 
     /// Returns the time it took to go from the parsed AST to the formatted output. Parsing time is
     /// not included.
-    pub fn get_format_time(&self) -> f32 {
+    pub(crate) fn get_format_time(&self) -> f32 {
         match *self {
             Timer::Disabled => panic!("this platform cannot time execution"),
             Timer::DoneFormatting(_init, parse_time, format_time) => {
@@ -205,22 +208,26 @@ impl Timer {
         }
     }
 
-    pub fn duration_to_f32(d: Duration) -> f32 {
+    #[allow(clippy::cast_precision_loss)]
+    fn duration_to_f32(d: Duration) -> f32 {
         d.as_secs() as f32 + d.subsec_nanos() as f32 / 1_000_000_000f32
     }
 }
 
 #[derive(Debug)]
-pub enum Input {
+/// Source accepted by a [`crate::driver::FormatterSession`].
+pub enum FormatInput {
+    /// Reads source from the given file path.
     File(PathBuf),
+    /// Formats source already held in memory.
     Text(String),
 }
 
-impl Input {
-    pub fn file_name(&self) -> FileName {
+impl FormatInput {
+    pub(crate) fn file_name(&self) -> FileName {
         match *self {
-            Input::File(ref file) => FileName::Real(file.clone()),
-            Input::Text(..) => FileName::Stdin,
+            FormatInput::File(ref file) => FileName::Real(file.clone()),
+            FormatInput::Text(..) => FileName::Stdin,
         }
     }
 
@@ -233,8 +240,7 @@ impl Input {
 
         if size > MAX_FILE_SIZE.into() {
             return Err(io::Error::other(format!(
-                "text files larger than {} bytes are unsupported",
-                MAX_FILE_SIZE
+                "text files larger than {MAX_FILE_SIZE} bytes are unsupported",
             )));
         }
         let mut contents = String::new();
@@ -242,16 +248,16 @@ impl Input {
         Ok(contents)
     }
 
-    pub fn load(self) -> io::Result<String> {
+    pub(crate) fn load(self) -> io::Result<String> {
         match self {
-            Input::File(ref file) => Self::read_file(file.as_path()),
-            Input::Text(text) => Ok(text),
+            FormatInput::File(ref file) => Self::read_file(file.as_path()),
+            FormatInput::Text(text) => Ok(text),
         }
     }
 }
 
 impl EmitMode {
-    pub(crate) fn create_emitter<'a>(&self, config: &EmitterConfig) -> Box<dyn Emitter + 'a> {
+    pub(crate) fn create_emitter<'a>(self, config: &EmitterConfig) -> Box<dyn Emitter + 'a> {
         match self {
             EmitMode::Files => Box::new(emitter::FilesEmitter::new(config.print_misformatted_file_names)),
             EmitMode::Stdout => Box::new(emitter::StdoutEmitter::new(config.verbose)),

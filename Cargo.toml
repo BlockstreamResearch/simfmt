@@ -3,8 +3,9 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-license = "MIT"
 edition = "2024"
+repository = "https://github.com/BlockstreamResearch/simfmt/"
+rust-version = "1.91.0"
 
 [workspace.lints.rust]
 rust_2018_idioms = "warn"

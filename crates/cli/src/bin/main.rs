@@ -1,14 +1,14 @@
-use tracing_subscriber::EnvFilter;
-
 use std::io::Write;
+
+use tracing_subscriber::EnvFilter;
 
 fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_env("SIMFMT_LOG"))
         .init();
-    let opts = simfmt::cli::make_opts();
+    let opts = simfmt::make_opts();
 
-    let exit_code = match simfmt::cli::execute(&opts) {
+    let exit_code = match simfmt::execute(&opts) {
         Ok(code) => code,
         Err(e) => {
             eprintln!("{e:#}");

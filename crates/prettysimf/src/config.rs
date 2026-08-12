@@ -1,10 +1,11 @@
-use crate::emitter::EmitterConfig;
-use crate::utils::{EmitMode, Verbosity};
 use std::cell::Cell;
 use std::io::Write;
 
+use crate::emitter::EmitterConfig;
+use crate::utils::{EmitMode, Verbosity};
+
 /// Trait for values that can be used in formatter configuration.
-pub trait ConfigType: Sized {
+pub(crate) trait ConfigType: Sized {
     fn doc_hint() -> String;
 }
 
@@ -34,13 +35,15 @@ impl ConfigType for EmitMode {
 
 macro_rules! config_type {
     (
+        $(#[$enum_meta:meta])*
         pub enum $name:ident {
-            $($variant:ident),+ $(,)?
+            $($(#[$variant_meta:meta])* $variant:ident),+ $(,)?
         }
     ) => {
         #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+        $(#[$enum_meta])*
         pub enum $name {
-            $($variant),+
+            $($(#[$variant_meta])* $variant),+
         }
 
         impl std::fmt::Display for $name {
@@ -108,9 +111,13 @@ macro_rules! config_type {
 }
 
 config_type! {
+    /// Controls whether formatter output uses terminal colors.
     pub enum Color {
+        /// Requests colored output.
         Always,
+        /// Disables colored output.
         Never,
+        /// Uses colors when the output terminal supports them.
         Auto,
     }
 }
@@ -123,7 +130,7 @@ impl Default for Color {
 }
 
 impl Color {
-    pub fn use_colored_tty(&self) -> bool {
+    pub(crate) fn use_colored_tty(self) -> bool {
         match self {
             Color::Always | Color::Auto => true,
             Color::Never => false,
@@ -132,10 +139,15 @@ impl Color {
 }
 
 config_type! {
+    /// Controls the line endings used in formatted output.
     pub enum NewlineStyle {
+        /// Preserves the first line-ending style detected in the input.
         Auto,
+        /// Uses Windows-style CRLF line endings.
         Windows,
+        /// Uses Unix-style LF line endings.
         Unix,
+        /// Uses the platform-native line-ending style.
         Native,
     }
 }
@@ -154,15 +166,20 @@ impl Default for NewlineStyle {
 /// options supplied by TOML or the command line.
 macro_rules! create_config {
     ($($name:ident: $ty:ty = $default:expr, $description:expr;)+) => {
+        /// Fully resolved formatter configuration.
         #[derive(Clone, Debug)]
         pub struct FmtConfig {
             // (was accessed, was explicitly set, value)
             $($name: (Cell<bool>, bool, $ty),)+
         }
 
+        /// Optional configuration values used to override resolved settings.
         #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, Default, PartialEq)]
         pub struct PartialConfig {
-            $(pub $name: Option<$ty>,)+
+            $(
+                #[doc = $description]
+                pub $name: Option<$ty>,
+            )+
         }
 
         pub struct ConfigSetter<'a>(&'a mut FmtConfig);
@@ -186,6 +203,7 @@ macro_rules! create_config {
         }
 
         impl PartialConfig {
+            /// Replaces each option with the corresponding value present in `other`.
             pub fn merge_from(&mut self, other: &Self) {
                 $(
                     if other.$name.is_some() {
@@ -194,6 +212,12 @@ macro_rules! create_config {
                 )+
             }
 
+            /// Parses and sets one configuration option by name.
+            ///
+            /// # Errors
+            ///
+            /// Returns an error if `key` is unknown or `val` cannot be parsed as
+            /// the option's value type.
             pub fn override_value(&mut self, key: &str, val: &str) -> Result<(), &'static str> {
                 match key {
                     $(
@@ -208,6 +232,11 @@ macro_rules! create_config {
 
             /// Serialize only project formatting options. Runtime controls are
             /// deliberately omitted, matching rustfmt's `PartialConfig::to_toml`.
+            ///
+            /// # Errors
+            ///
+            /// Returns an error if the project formatting options cannot be
+            /// serialized as TOML.
             pub fn to_toml(&self) -> Result<String, toml::ser::Error> {
                 let mut config = self.clone();
                 $(
@@ -221,20 +250,24 @@ macro_rules! create_config {
 
         impl FmtConfig {
             $(
+                #[doc = concat!("Returns the configured `", stringify!($name), "` value and records it as used.")]
                 pub fn $name(&self) -> $ty {
                     self.$name.0.set(true);
                     self.$name.2.clone()
                 }
             )+
 
+            /// Returns a setter for updating resolved configuration values.
             pub fn set(&mut self) -> ConfigSetter<'_> {
                 ConfigSetter(self)
             }
 
+            /// Returns an accessor for checking which options were explicitly set.
             pub fn was_set(&self) -> ConfigWasSet<'_> {
                 ConfigWasSet(self)
             }
 
+            /// Applies every value present in `partial` to this configuration.
             pub fn apply_override(&mut self, partial: PartialConfig) {
                 $(
                     if let Some(value) = partial.$name {
@@ -244,10 +277,12 @@ macro_rules! create_config {
                 )+
             }
 
+            /// Returns whether `name` identifies a known configuration option.
             pub fn is_valid_key(name: &str) -> bool {
                 matches!(name, $(stringify!($name))|+)
             }
 
+            /// Returns whether `val` can be parsed for the option named by `key`.
             pub fn is_valid_key_val(key: &str, val: &str) -> bool {
                 match key {
                     $(
@@ -283,11 +318,13 @@ macro_rules! create_config {
                 }
             }
 
+            /// Returns whether an option is an internal runtime control.
             pub fn is_hidden_option(name: &str) -> bool {
                 const HIDE_OPTIONS: [&str; 4] = ["verbose" , "emit_mode", "color", "print_misformatted_file_names",];
                 HIDE_OPTIONS.contains(&name)
             }
 
+            /// Writes documentation for user-facing configuration options.
             pub fn print_docs(out: &mut dyn Write) {
                 writeln!(out, "Configuration Options:").unwrap();
                 $(
@@ -347,14 +384,14 @@ impl std::fmt::Display for EmitMode {
 }
 
 impl FmtConfig {
-    pub fn formatting_config(&self) -> InnerFmtConfig {
+    pub(crate) fn formatting_config(&self) -> InnerFmtConfig {
         InnerFmtConfig {
             indent_width: self.indent_width(),
             line_width: self.line_width(),
         }
     }
 
-    pub fn get_emitter_conf(&self) -> EmitterConfig {
+    pub(crate) fn get_emitter_conf(&self) -> EmitterConfig {
         EmitterConfig {
             print_misformatted_file_names: self.print_misformatted_file_names(),
             verbose: self.verbose(),
@@ -364,7 +401,7 @@ impl FmtConfig {
 }
 
 #[derive(Debug, Clone)]
-pub struct InnerFmtConfig {
+pub(crate) struct InnerFmtConfig {
     pub indent_width: usize,
     pub line_width: usize,
 }

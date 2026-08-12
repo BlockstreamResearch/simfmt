@@ -1,5 +1,3 @@
-use annotate_snippets::{Annotation, AnnotationKind, Group, Level, Renderer, Snippet};
-
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
@@ -9,15 +7,17 @@ use crate::error::ErrorKind;
 use crate::fmt_processor::{FormatErrorMap, FormattingError, ReportedErrors};
 use crate::utils::FileName;
 
+use annotate_snippets::{Annotation, AnnotationKind, Group, Level, Renderer, Snippet};
+
 /// A builder for [`FormatReportFormatter`].
-pub struct FormatReportFormatterBuilder<'a> {
+pub(crate) struct FormatReportFormatterBuilder<'a> {
     report: &'a FormatReport,
     enable_colors: bool,
 }
 
 impl<'a> FormatReportFormatterBuilder<'a> {
     /// Creates a new [`FormatReportFormatterBuilder`].
-    pub fn new(report: &'a FormatReport) -> Self {
+    pub(crate) fn new(report: &'a FormatReport) -> Self {
         Self {
             report,
             enable_colors: false,
@@ -26,12 +26,12 @@ impl<'a> FormatReportFormatterBuilder<'a> {
 
     /// Enables colors and formatting in the output.
     #[must_use]
-    pub fn enable_colors(self, enable_colors: bool) -> Self {
+    pub(crate) fn enable_colors(self, enable_colors: bool) -> Self {
         Self { enable_colors, ..self }
     }
 
     /// Creates a new [`FormatReportFormatter`] from the settings in this builder.
-    pub fn build(self) -> FormatReportFormatter<'a> {
+    pub(crate) fn build(self) -> FormatReportFormatter<'a> {
         FormatReportFormatter {
             report: self.report,
             enable_colors: self.enable_colors,
@@ -42,12 +42,12 @@ impl<'a> FormatReportFormatterBuilder<'a> {
 /// Formats the warnings/errors in a [`FormatReport`].
 ///
 /// Can be created using a [`FormatReportFormatterBuilder`].
-pub struct FormatReportFormatter<'a> {
+pub(crate) struct FormatReportFormatter<'a> {
     report: &'a FormatReport,
     enable_colors: bool,
 }
 
-impl<'a> fmt::Display for FormatReportFormatter<'a> {
+impl fmt::Display for FormatReportFormatter<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let errors_by_file = &self.report.internal.borrow().0;
 
@@ -123,22 +123,16 @@ fn error_kind_to_snippet_annotation_level(error_kind: &ErrorKind) -> Level<'_> {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct FormatReport {
+pub(crate) struct FormatReport {
     // Maps stringified file paths to their associated formatting errors.
     pub(crate) internal: Rc<RefCell<(FormatErrorMap, ReportedErrors)>>,
-    non_formatted_ranges: Vec<(usize, usize)>,
 }
 
 impl FormatReport {
-    pub fn new() -> FormatReport {
+    pub(crate) fn new() -> FormatReport {
         FormatReport {
             internal: Rc::new(RefCell::new((HashMap::new(), ReportedErrors::default()))),
-            non_formatted_ranges: Vec::new(),
         }
-    }
-
-    pub fn add_non_formatted_ranges(&mut self, mut ranges: Vec<(usize, usize)>) {
-        self.non_formatted_ranges.append(&mut ranges);
     }
 
     pub(crate) fn append(&self, f: FileName, mut v: Vec<FormattingError>) {
@@ -166,20 +160,20 @@ impl FormatReport {
         }
     }
 
-    pub fn add_diff(&mut self) {
+    pub(crate) fn add_diff(&mut self) {
         self.internal.borrow_mut().1.has_diff = true;
     }
 
-    pub fn add_parsing_error(&mut self) {
+    pub(crate) fn add_parsing_error(&mut self) {
         self.internal.borrow_mut().1.has_parsing_errors = true;
     }
 
     pub(crate) fn warning_count(&self) -> usize {
-        self.internal.borrow().0.values().map(|errors| errors.len()).sum()
+        self.internal.borrow().0.values().map(Vec::len).sum()
     }
 
     /// Whether any warnings or errors are present in the report.
-    pub fn has_warnings(&self) -> bool {
+    pub(crate) fn has_warnings(&self) -> bool {
         self.internal.borrow().1.has_formatting_errors
     }
 }

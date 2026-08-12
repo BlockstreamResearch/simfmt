@@ -273,8 +273,8 @@ fn compute_market_id() -> u256 {
 fn verify_oracle_signature(outcome_yes: bool, signature: Signature) {
     let market_id: u256 = compute_market_id();
     let outcome_byte: u8 = match outcome_yes {
-        true => 1,
         false => 0,
+        true => 1,
     };
     let ctx: Ctx8 = jet::sha_256_ctx_8_init();
     let ctx: Ctx8 = jet::sha_256_ctx_8_add_32(ctx, market_id);
@@ -411,8 +411,8 @@ fn oracle_resolve_primary_path(slot: u8, outcome_yes: bool, sig: Signature, yes_
     ensure_blinded_reissuance_burn_output(0, param::YES_REISSUANCE_TOKEN, yes_out_abf, yes_out_vbf);
 
     let new_collateral_hash: u256 = match outcome_yes {
-        true => resolved_yes_collateral_script_hash(),
         false => resolved_no_collateral_script_hash(),
+        true => resolved_yes_collateral_script_hash(),
     };
 
     let (coll_asset, coll_amount): (u256, u64) = get_input_explicit_asset_amount(2);
@@ -455,8 +455,8 @@ fn post_resolution_redemption_path(slot: u8, tokens_burned: u64) {
 
     let state_hash: u256 = script_hash_for_input_slot(slot);
     let winner_asset: u256 = match is_yes {
-        true => param::YES_TOKEN_ASSET,
         false => param::NO_TOKEN_ASSET,
+        true => param::YES_TOKEN_ASSET,
     };
 
     ensure_no_issuance(0);
@@ -470,17 +470,17 @@ fn post_resolution_redemption_path(slot: u8, tokens_burned: u64) {
     let is_partial: bool = not(jet::is_zero_64(remaining));
 
     match is_partial {
+        false => {
+            ensure_output_asset_with_amount_eq(0, winner_asset, tokens_burned);
+            ensure_output_is_burn(0);
+            let fee_idx: u32 = safe_subtract_32(num_outputs, 1);
+            ensure_fee_output(fee_idx);
+        },
         true => {
             ensure_output_asset_with_amount_eq(0, param::COLLATERAL_ASSET_ID, remaining);
             ensure_output_script_hash_eq(0, state_hash);
             ensure_output_asset_with_amount_eq(1, winner_asset, tokens_burned);
             ensure_output_is_burn(1);
-            let fee_idx: u32 = safe_subtract_32(num_outputs, 1);
-            ensure_fee_output(fee_idx);
-        },
-        false => {
-            ensure_output_asset_with_amount_eq(0, winner_asset, tokens_burned);
-            ensure_output_is_burn(0);
             let fee_idx: u32 = safe_subtract_32(num_outputs, 1);
             ensure_fee_output(fee_idx);
         },
@@ -554,17 +554,17 @@ fn expiry_redemption_path(slot: u8, tokens_burned: u64, burn_asset: u256) {
     let is_partial: bool = not(jet::is_zero_64(remaining));
 
     match is_partial {
+        false => {
+            ensure_output_asset_with_amount_eq(0, burn_asset, tokens_burned);
+            ensure_output_is_burn(0);
+            let fee_idx: u32 = safe_subtract_32(num_outputs, 1);
+            ensure_fee_output(fee_idx);
+        },
         true => {
             ensure_output_asset_with_amount_eq(0, param::COLLATERAL_ASSET_ID, remaining);
             ensure_output_script_hash_eq(0, expired_hash);
             ensure_output_asset_with_amount_eq(1, burn_asset, tokens_burned);
             ensure_output_is_burn(1);
-            let fee_idx: u32 = safe_subtract_32(num_outputs, 1);
-            ensure_fee_output(fee_idx);
-        },
-        false => {
-            ensure_output_asset_with_amount_eq(0, burn_asset, tokens_burned);
-            ensure_output_is_burn(0);
             let fee_idx: u32 = safe_subtract_32(num_outputs, 1);
             ensure_fee_output(fee_idx);
         },

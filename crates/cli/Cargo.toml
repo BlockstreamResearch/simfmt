@@ -2,10 +2,15 @@
 name = "simfmt"
 version = "0.0.1"
 description = "Formatting tool for SimplicityHL"
-repository = "https://github.com/ikripaka/simplefmt"
-readme = "../../README.md"
-license.workspace = true
+authors = ["ikripaka <illia.kripaka@gmail.com>"]
+categories = ["development-tools", "command-line-utilities", "text-processing"]
+keywords = ["simplicity", "simplicityhl", "formatter", "cli", "simfmt"]
+readme = "README.md"
+license = "MIT"
+
 edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
 
 [[bin]]
 name = "simfmt"

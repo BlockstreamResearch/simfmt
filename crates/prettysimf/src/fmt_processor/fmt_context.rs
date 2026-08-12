@@ -1,29 +1,29 @@
+use std::sync::Arc;
+
 use crate::config::{FmtConfig, InnerFmtConfig, NewlineStyle};
 use crate::error::ErrorKind;
 use crate::fmt_processor::{FormatHandler, FormattingError};
 use crate::newline_style::apply_newline_style;
 use crate::reporter::FormatReport;
-use crate::utils::{FileName, Input};
-use simplicityhl::error::{Diagnostic, DiagnosticManager};
-use simplicityhl::parse::{ParsedSource, Program};
-use std::sync::Arc;
+use crate::utils::{FileName, FormatInput};
 
-pub struct FormatContext<'a, T: FormatHandler> {
-    pub report: FormatReport,
+use simplicityhl::error::{Diagnostic, DiagnosticManager};
+use simplicityhl::parse::Program;
+
+pub(crate) struct FormatContext<'a, T: FormatHandler> {
+    pub(crate) report: FormatReport,
     fmt_config: &'a FmtConfig,
     handler: &'a mut T,
 }
 
-pub struct RawFormatContext {
+pub(crate) struct RawFormatContext {
     file: FileName,
     input_text: Arc<str>,
     buffer: String,
 }
 
-pub type ParsedProgram<'src> = Result<ParsedSource<'src>, Vec<Diagnostic>>;
-
 impl RawFormatContext {
-    pub fn new(input: Input) -> Result<Self, ErrorKind> {
+    pub(crate) fn new(input: FormatInput) -> Result<Self, ErrorKind> {
         let main_file = input.file_name();
         let text = input.load()?;
         let buffer = String::with_capacity(text.len() * 2);
@@ -53,7 +53,7 @@ impl RawFormatContext {
         let parsed =
             parsed.ok_or_else(|| [FormattingError::from_error_kind(ErrorKind::ParseError, "Empty program")])?;
 
-        let formatted = crate::simplicity_fmt::fmt::format_program(&parsed, self.input_text.as_ref(), fmt_config)
+        let formatted = crate::simplicity_fmt::format_program(&parsed, self.input_text.as_ref(), fmt_config)
             .map_err(|error| vec![FormattingError::from_error_kind(error, self.input_text.as_ref())])?;
         self.buffer.push_str(&formatted);
 
@@ -62,7 +62,7 @@ impl RawFormatContext {
 }
 
 impl<'a, T: FormatHandler + 'a> FormatContext<'a, T> {
-    pub fn new(report: FormatReport, config: &'a FmtConfig, handler: &'a mut T) -> Self {
+    pub(crate) fn new(report: FormatReport, config: &'a FmtConfig, handler: &'a mut T) -> Self {
         FormatContext {
             report,
             fmt_config: config,
@@ -71,7 +71,7 @@ impl<'a, T: FormatHandler + 'a> FormatContext<'a, T> {
     }
 
     // Formats a single file.
-    pub fn format_file(&mut self, mut raw_ctx: RawFormatContext) -> Result<(), ErrorKind> {
+    pub(crate) fn format_file(&mut self, mut raw_ctx: RawFormatContext) -> Result<(), ErrorKind> {
         let formatting_config = self.fmt_config.formatting_config();
         if let Err(errors) = raw_ctx.format_lines(&formatting_config) {
             let has_parsing_errors = errors.iter().any(|error| matches!(&error.kind, ErrorKind::ParseError));
