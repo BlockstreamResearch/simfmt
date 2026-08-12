@@ -5,7 +5,7 @@
 [![Integration](https://github.com/BlockstreamResearch/simfmt/actions/workflows/fixtures.yml/badge.svg?branch=master)](https://github.com/BlockstreamResearch/simfmt/workflows/fixtures.yml)
 [![Community](https://img.shields.io/endpoint?color=neon&logo=telegram&label=Chat&url=https%3A%2F%2Ftg.sumanjay.workers.dev%2Fsimplicity_community)](https://t.me/simplicity_community)
 
-SimplicityHL formatter tool
+[SimplicityHL][1] formatter tool
 
 ## Usage
 
@@ -46,7 +46,7 @@ Options:
 
 ```
 
-`simfmt` formats complete SimplicityHL source files according to the project's
+`simfmt` formats complete [SimplicityHL][1] source files according to the project's
 style rules. It can update files in place, write formatted source to standard
 output, or verify formatting in CI.
 
@@ -55,7 +55,7 @@ output, or verify formatting in CI.
 ### From source
 
 ```sh
-cargo +stable install simfmt --locked
+$ cargo +stable install simfmt --locked
 ```
 
 Currently, installing `simfmt` requires rustc 1.91+.
@@ -64,7 +64,7 @@ Currently, installing `simfmt` requires rustc 1.91+.
 Install the formatter with Cargo:
 
 ```sh
-cargo +stable install --path ./crates/cli/
+$ cargo +stable install --path ./crates/cli/
 ```
 
 ## Usage
@@ -72,20 +72,20 @@ cargo +stable install --path ./crates/cli/
 Format one or more files in place:
 
 ```sh
-simfmt contract.simf module.simf
+$ simfmt contract.simf module.simf
 ```
 
 Read source from standard input and write the formatted result to standard
 output:
 
 ```sh
-echo 'fn     main() {}' | simfmt
+$ echo 'fn     main() {}' | simfmt
 ```
 
 Write formatted file input to standard output instead of modifying the file:
 
 ```sh
-simfmt --emit stdout contract.simf
+$ simfmt --emit stdout contract.simf
 ```
 
 Run `simfmt --help` for the complete command-line reference and
@@ -96,7 +96,7 @@ Run `simfmt --help` for the complete command-line reference and
 Use `--check` to verify formatting without changing files:
 
 ```sh
-simfmt --check contract.simf module.simf
+$ simfmt --check contract.simf module.simf
 ```
 
 ### CI usage
@@ -106,8 +106,8 @@ status `1` when it finds a difference or formatting error. Any generated diffs
 are printed. This makes the command suitable for CI:
 
 ```sh
-cargo install simfmt
-simfmt --check src/main.simf
+$ cargo install simfmt
+$ simfmt --check src/main.simf
 ```
 
 Use `--files-with-diff` with check mode when only the names of mismatched files
@@ -125,7 +125,8 @@ through `--config key=value` take precedence.
 Generate a configuration containing all default formatting options:
 
 ```sh
-simfmt --print-config default simfmt.toml
+# simfmt --print-config [default|current|minimal] PATH
+$ simfmt --print-config default simfmt.toml
 ```
 
 Configuration precedence is:
@@ -134,17 +135,11 @@ Configuration precedence is:
 defaults < config file < --config key=value
 ```
 
-Other supported output modes are:
-
-| Mode | Behavior |
-| --- | --- |
-| `files` | Overwrite input files when their formatting changes. |
-| `stdout` | Write formatted source to standard output. |
-
-Select a mode with `--emit`, for example:
+You can change the way `simfmt` emits the changes with the `--emit` flag:
 
 ```sh
-simfmt --emit files contract.simf
+# simfmt <files> --emit [files|stdout]
+$ simfmt --emit files contract.simf
 ```
 
 ## Editor integration
@@ -154,15 +149,15 @@ simfmt --emit files contract.simf
 
 ## Limitations
 
-`simfmt` formats complete programs and requires input that can be parsed. Some
-valid source constructs can still be unsupported. In particular:
+`simfmt` formats valid programs in AST (not always required to compile) and requires an input that can be parsed.
+Some valid source formatting can still be unsupported. In particular:
 
 - `use` declarations are not currently formatted.
 - Complex comment placement may cause formatting to fail safely without
   modifying the input.
 - [SimplicityHL][1] code blocks embedded in comments are not formatted.
 - Formatting stability applies to complete programs, not arbitrary fragments.
-- Non-ASCII source has less test coverage. (we believe Simfmt mostly works here, but do not have the test coverage
+- Non-ASCII source has less test coverage. (we believe `simfmt` mostly works here, but do not have the test coverage
   or experience to be 100% sure).
 
 ## Contribution
