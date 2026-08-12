@@ -104,6 +104,7 @@ fn check_cosigner(i: u32, sig: Signature) {
     // Skip if COSIGNER_PUBKEY == NUMS (no cosigner configured)
     let is_nums: bool = jet::eq_256(param::COSIGNER_PUBKEY, nums_key());
     match is_nums {
+        true => {},
         false => {
             // Build custom sighash: SHA256(prev_outpoint || output_asset || output_amount || output_script_hash)
             let ctx: Ctx8 = jet::sha_256_ctx_8_init();
@@ -125,7 +126,6 @@ fn check_cosigner(i: u32, sig: Signature) {
             let msg: u256 = jet::sha_256_ctx_8_finalize(ctx);
             jet::bip_0340_verify((param::COSIGNER_PUBKEY, msg), sig);
         },
-        true => {},
     };
 }
 
@@ -146,6 +146,10 @@ fn validate_sell_base_fill(i: u32, i_rem: u32) {
     let is_full: bool = jet::eq_64(maker_amount, expected_full);
 
     match is_full {
+        true => {
+            // Full fill: all lots consumed
+            assert!(jet::le_64(param::MIN_FILL_LOTS, input_amount));
+        },
         false => {
             // Partial fill
             let (rem_asset, rem_amount): (u256, u64) = get_output_explicit_asset_amount(i_rem);
@@ -163,10 +167,6 @@ fn validate_sell_base_fill(i: u32, i_rem: u32) {
             let input_spk_hash: u256 = get_input_script_hash(i);
             assert!(jet::eq_256(rem_spk_hash, input_spk_hash));
         },
-        true => {
-            // Full fill: all lots consumed
-            assert!(jet::le_64(param::MIN_FILL_LOTS, input_amount));
-        },
     };
 }
 
@@ -183,6 +183,10 @@ fn validate_sell_quote_fill(i: u32, i_rem: u32) {
     let is_full: bool = jet::eq_64(expected_full, input_amount);
 
     match is_full {
+        true => {
+            // Full fill: all quote consumed
+            assert!(jet::le_64(param::MIN_FILL_LOTS, maker_amount));
+        },
         false => {
             // Partial fill
             let (rem_asset, rem_amount): (u256, u64) = get_output_explicit_asset_amount(i_rem);
@@ -204,10 +208,6 @@ fn validate_sell_quote_fill(i: u32, i_rem: u32) {
             let input_spk_hash: u256 = get_input_script_hash(i);
             assert!(jet::eq_256(rem_spk_hash, input_spk_hash));
         },
-        true => {
-            // Full fill: all quote consumed
-            assert!(jet::le_64(param::MIN_FILL_LOTS, maker_amount));
-        },
     };
 }
 
@@ -227,8 +227,8 @@ fn main() {
             let out_spk_hash: u256 = get_output_script_hash(i);
             assert!(jet::eq_256(out_spk_hash, param::MAKER_RECEIVE_SPK_HASH));
             match param::IS_SELL_BASE {
-                false => validate_sell_quote_fill(i, i_rem),
                 true => validate_sell_base_fill(i, i_rem),
+                false => validate_sell_quote_fill(i, i_rem),
             };
         },
         Right(u: ()) => {

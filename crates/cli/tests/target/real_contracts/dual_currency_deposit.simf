@@ -108,8 +108,8 @@ fn ensure_input_and_output_script_hash_eq(index: u32) {
 
 fn ensure_output_is_op_return(index: u32) {
     match jet::output_null_datum(index, 0) {
-        None => panic!(),
         Some(entry: Option<Either<(u2, u256), Either<u1, u4>>>) => (),
+        None => panic!(),
     }
 }
 
@@ -151,7 +151,6 @@ fn ensure_correct_change_at_index(
     assert!(jet::eq_32(jet::current_index(), index));
 
     match is_change_needed {
-        false => assert!(jet::eq_64(asset_amount_to_spend, available_asset_amount)),
         true => {
             ensure_input_and_output_script_hash_eq(index);
 
@@ -162,6 +161,7 @@ fn ensure_correct_change_at_index(
             ensure_zero_bit(carry);
             ensure_output_asset_with_amount_eq(index, asset_id, collateral_change);
         },
+        false => assert!(jet::eq_64(asset_amount_to_spend, available_asset_amount)),
     }
 }
 
@@ -374,8 +374,8 @@ fn taker_funding_path(
         collateral_to_covenant_output_index,
         filler_to_user_output_index
     ): (u32, u32) = match is_change_needed {
-        false => (0, 1),
         true => (1, 2),
+        false => (0, 1),
     };
 
     let expected_current_script_hash: u256 = get_input_script_hash(filler_token_input_index);
@@ -429,8 +429,8 @@ fn taker_early_termination_path(
         return_filler_output_index,
         return_collateral_output_index
     ): (u32, u32) = match is_change_needed {
-        false => (0, 1),
         true => (1, 2),
+        false => (0, 1),
     };
 
     let expected_current_script_hash: u256 = get_input_script_hash(collateral_input_index);
@@ -485,8 +485,8 @@ fn maker_collateral_termination_path(
         burn_grantor_collateral_output_index,
         return_collateral_output_index
     ): (u32, u32) = match is_change_needed {
-        false => (0, 1),
         true => (1, 2),
+        false => (0, 1),
     };
 
     let expected_current_script_hash: u256 = get_input_script_hash(collateral_input_index);
@@ -541,8 +541,8 @@ fn maker_settlement_termination_path(
         burn_grantor_settlement_output_index,
         return_settlement_output_index
     ): (u32, u32) = match is_change_needed {
-        false => (0, 1),
         true => (1, 2),
+        false => (0, 1),
     };
 
     let expected_current_script_hash: u256 = get_input_script_hash(settlement_asset_input_index);
@@ -586,6 +586,7 @@ fn ensure_correct_return_at(
     fee_basis_points: u64
 ) {
     match jet::eq_64(fee_basis_points, 0) {
+        true => ensure_output_asset_with_amount_eq(user_output_index, asset_id, amount_to_get),
         false => {
             let fee_output_index: u32 = increment_by(user_output_index, 1);
 
@@ -611,7 +612,6 @@ fn ensure_correct_return_at(
 
             ensure_output_script_hash_eq(fee_output_index, param::FEE_SCRIPT_HASH);
         },
-        true => ensure_output_asset_with_amount_eq(user_output_index, asset_id, amount_to_get),
     };
 }
 
@@ -631,6 +631,57 @@ fn maker_settlement_path(
     );
 
     match jet::le_64(price_at_current_block_height, param::STRIKE_PRICE) {
+        true => {
+            // Maker gets ALT
+            let settlement_asset_input_index: u32 = 0;
+
+            let (
+                burn_grantor_settlement_output_index,
+                burn_grantor_collateral_output_index,
+                settlement_output_index
+            ): (u32, u32, u32) = match is_change_needed {
+                true => (1, 2, 3),
+                false => (0, 1, 2),
+            };
+
+            let expected_current_script_hash: u256 = get_input_script_hash(
+                settlement_asset_input_index
+            );
+
+            // Check and ensure settlement asset change
+            ensure_correct_change_at_index(
+                0,
+                param::SETTLEMENT_ASSET_ID,
+                amount_to_get,
+                expected_current_script_hash,
+                is_change_needed
+            );
+
+            // Ensure settlement asset amount is correct
+            divmod_eq(amount_to_get, param::GRANTOR_PER_SETTLEMENT_ASSET, grantor_amount_to_burn);
+
+            // Burn grantor settlement and collateral tokens
+            ensure_output_is_op_return(burn_grantor_settlement_output_index);
+            ensure_output_asset_with_amount_eq(
+                burn_grantor_settlement_output_index,
+                param::GRANTOR_SETTLEMENT_TOKEN_ASSET,
+                grantor_amount_to_burn
+            );
+            ensure_output_is_op_return(burn_grantor_collateral_output_index);
+            ensure_output_asset_with_amount_eq(
+                burn_grantor_collateral_output_index,
+                param::GRANTOR_COLLATERAL_TOKEN_ASSET,
+                grantor_amount_to_burn
+            );
+
+            // Ensure settlement asset transferred to user
+            ensure_correct_return_at(
+                settlement_output_index,
+                param::SETTLEMENT_ASSET_ID,
+                amount_to_get,
+                param::FEE_BASIS_POINTS
+            );
+        },
         false => {
             // Maker gets the LBTC
             let collateral_input_index: u32 = 0;
@@ -640,8 +691,8 @@ fn maker_settlement_path(
                 burn_grantor_settlement_output_index,
                 collateral_output_index
             ): (u32, u32, u32) = match is_change_needed {
-                false => (0, 1, 2),
                 true => (1, 2, 3),
+                false => (0, 1, 2),
             };
 
             let expected_current_script_hash: u256 = get_input_script_hash(collateral_input_index);
@@ -684,57 +735,6 @@ fn maker_settlement_path(
                 param::FEE_BASIS_POINTS
             );
         },
-        true => {
-            // Maker gets ALT
-            let settlement_asset_input_index: u32 = 0;
-
-            let (
-                burn_grantor_settlement_output_index,
-                burn_grantor_collateral_output_index,
-                settlement_output_index
-            ): (u32, u32, u32) = match is_change_needed {
-                false => (0, 1, 2),
-                true => (1, 2, 3),
-            };
-
-            let expected_current_script_hash: u256 = get_input_script_hash(
-                settlement_asset_input_index
-            );
-
-            // Check and ensure settlement asset change
-            ensure_correct_change_at_index(
-                0,
-                param::SETTLEMENT_ASSET_ID,
-                amount_to_get,
-                expected_current_script_hash,
-                is_change_needed
-            );
-
-            // Ensure settlement asset amount is correct
-            divmod_eq(amount_to_get, param::GRANTOR_PER_SETTLEMENT_ASSET, grantor_amount_to_burn);
-
-            // Burn grantor settlement and collateral tokens
-            ensure_output_is_op_return(burn_grantor_settlement_output_index);
-            ensure_output_asset_with_amount_eq(
-                burn_grantor_settlement_output_index,
-                param::GRANTOR_SETTLEMENT_TOKEN_ASSET,
-                grantor_amount_to_burn
-            );
-            ensure_output_is_op_return(burn_grantor_collateral_output_index);
-            ensure_output_asset_with_amount_eq(
-                burn_grantor_collateral_output_index,
-                param::GRANTOR_COLLATERAL_TOKEN_ASSET,
-                grantor_amount_to_burn
-            );
-
-            // Ensure settlement asset transferred to user
-            ensure_correct_return_at(
-                settlement_output_index,
-                param::SETTLEMENT_ASSET_ID,
-                amount_to_get,
-                param::FEE_BASIS_POINTS
-            );
-        },
     }
 }
 
@@ -754,50 +754,6 @@ fn taker_settlement_path(
     );
 
     match jet::le_64(price_at_current_block_height, param::STRIKE_PRICE) {
-        false => {
-            // Taker receives ALT
-            let settlement_asset_input_index: u32 = 0;
-
-            let (
-                burn_filler_output_index,
-                settlement_output_index
-            ): (u32, u32) = match is_change_needed {
-                false => (0, 1),
-                true => (1, 2),
-            };
-
-            let expected_current_script_hash: u256 = get_input_script_hash(
-                settlement_asset_input_index
-            );
-
-            // Check and ensure settlement asset change
-            ensure_correct_change_at_index(
-                0,
-                param::SETTLEMENT_ASSET_ID,
-                amount_to_get,
-                expected_current_script_hash,
-                is_change_needed
-            );
-
-            // Ensure settlement asset amount is correct
-            divmod_eq(amount_to_get, param::FILLER_PER_SETTLEMENT_ASSET, filler_amount_to_burn);
-
-            // Burn filler token
-            ensure_output_is_op_return(burn_filler_output_index);
-            ensure_output_asset_with_amount_eq(
-                burn_filler_output_index,
-                param::FILLER_TOKEN_ASSET,
-                filler_amount_to_burn
-            );
-
-            // Ensure filler token transferred to user
-            ensure_correct_return_at(
-                settlement_output_index,
-                param::SETTLEMENT_ASSET_ID,
-                amount_to_get,
-                param::FEE_BASIS_POINTS
-            );
-        },
         true => {
             // Taker receives LBTC principal+interest
             let collateral_input_index: u32 = 0;
@@ -806,8 +762,8 @@ fn taker_settlement_path(
                 burn_filler_output_index,
                 collateral_output_index
             ): (u32, u32) = match is_change_needed {
-                false => (0, 1),
                 true => (1, 2),
+                false => (0, 1),
             };
 
             let expected_current_script_hash: u256 = get_input_script_hash(collateral_input_index);
@@ -840,6 +796,50 @@ fn taker_settlement_path(
             ensure_correct_return_at(
                 collateral_output_index,
                 param::COLLATERAL_ASSET_ID,
+                amount_to_get,
+                param::FEE_BASIS_POINTS
+            );
+        },
+        false => {
+            // Taker receives ALT
+            let settlement_asset_input_index: u32 = 0;
+
+            let (
+                burn_filler_output_index,
+                settlement_output_index
+            ): (u32, u32) = match is_change_needed {
+                true => (1, 2),
+                false => (0, 1),
+            };
+
+            let expected_current_script_hash: u256 = get_input_script_hash(
+                settlement_asset_input_index
+            );
+
+            // Check and ensure settlement asset change
+            ensure_correct_change_at_index(
+                0,
+                param::SETTLEMENT_ASSET_ID,
+                amount_to_get,
+                expected_current_script_hash,
+                is_change_needed
+            );
+
+            // Ensure settlement asset amount is correct
+            divmod_eq(amount_to_get, param::FILLER_PER_SETTLEMENT_ASSET, filler_amount_to_burn);
+
+            // Burn filler token
+            ensure_output_is_op_return(burn_filler_output_index);
+            ensure_output_asset_with_amount_eq(
+                burn_filler_output_index,
+                param::FILLER_TOKEN_ASSET,
+                filler_amount_to_burn
+            );
+
+            // Ensure filler token transferred to user
+            ensure_correct_return_at(
+                settlement_output_index,
+                param::SETTLEMENT_ASSET_ID,
                 amount_to_get,
                 param::FEE_BASIS_POINTS
             );

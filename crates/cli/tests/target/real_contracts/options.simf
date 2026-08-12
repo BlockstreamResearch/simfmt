@@ -67,8 +67,8 @@ fn ensure_input_and_output_script_hash_eq(index: u32) {
 
 fn ensure_output_is_op_return(index: u32) {
     match jet::output_null_datum(index, 0) {
-        None => panic!(),
         Some(entry: Option<Either<(u2, u256), Either<u1, u4>>>) => (),
+        None => panic!(),
     }
 }
 
@@ -110,7 +110,6 @@ fn ensure_correct_change_at_index(
     assert!(jet::eq_32(jet::current_index(), index));
 
     match is_change_needed {
-        false => assert!(jet::eq_64(asset_amount_to_spend, available_asset_amount)),
         true => {
             ensure_input_and_output_script_hash_eq(index);
 
@@ -121,15 +120,16 @@ fn ensure_correct_change_at_index(
             ensure_zero_bit(carry);
             ensure_output_asset_with_amount_eq(index, asset_id, collateral_change);
         },
+        false => assert!(jet::eq_64(asset_amount_to_spend, available_asset_amount)),
     }
 }
 
 fn check_y(expected_y: Fe, actual_y: Fe) {
     match jet::eq_256(expected_y, actual_y) {
+        true => {},
         false => {
             assert!(jet::eq_256(expected_y, jet::fe_negate(actual_y)));
         },
-        true => {},
     };
 }
 
@@ -315,8 +315,8 @@ fn cancellation_path(
         burn_option_output_index,
         burn_grantor_output_index
     ): (u32, u32) = match is_change_needed {
-        false => (0, 1),
         true => (1, 2),
+        false => (0, 1),
     };
 
     let expected_current_script_hash: u256 = get_input_script_hash(collateral_input_index);
@@ -366,8 +366,8 @@ fn exercise_path(
         burn_option_output_index,
         asset_to_covenant_output_index
     ): (u32, u32) = match is_change_needed {
-        false => (0, 1),
         true => (1, 2),
+        false => (0, 1),
     };
 
     let expected_current_script_hash: u256 = get_input_script_hash(collateral_input_index);
@@ -411,8 +411,8 @@ fn settlement_path(grantor_token_amount_to_burn: u64, asset_amount: u64, is_chan
     let target_asset_input_index: u32 = 0;
 
     let burn_grantor_output_index: u32 = match is_change_needed {
-        false => 0,
         true => 1,
+        false => 0,
     };
 
     let expected_current_script_hash: u256 = get_input_script_hash(target_asset_input_index);
@@ -447,8 +447,8 @@ fn expiry_path(grantor_token_amount_to_burn: u64, collateral_amount: u64, is_cha
     let collateral_input_index: u32 = 0;
 
     let burn_grantor_output_index: u32 = match is_change_needed {
-        false => 0,
         true => 1,
+        false => 0,
     };
 
     let expected_current_script_hash: u256 = get_input_script_hash(collateral_input_index);

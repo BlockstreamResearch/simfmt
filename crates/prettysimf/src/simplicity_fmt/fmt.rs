@@ -398,12 +398,12 @@ fn main(value: Action) {
         let expected = r"fn main(value: Option<bool>, flag: bool) {
     let next: Option<bool> = Some(true);
     match value {
-        None => panic!(),
         Some(inner: bool) => Some(inner),
+        None => panic!(),
     };
     match flag {
-        false => false,
         true => true,
+        false => false,
     }
 }";
 
@@ -486,12 +486,12 @@ fn main() {
         let expected = "fn main() {
     // Keep this function source-aware.
     match true {
-        false => false,
         true => true,
+        false => false,
     };
     match true {
-        false => false,
         true => true,
+        false => false,
     }
 }
 ";
@@ -506,8 +506,8 @@ fn main() {
     false => {{safe_subtract(in_no_amount, out_no_amount)}},
 }";
         let expected = "match flag {
-    false => safe_subtract(in_no_amount, out_no_amount),
     true => safe_subtract(out_no_amount, in_no_amount),
+    false => safe_subtract(in_no_amount, out_no_amount),
 }";
 
         utils::assert_formatting_with_wrapping_in_all_modes(source, expected);
@@ -523,16 +523,16 @@ fn main() {
 }";
         let expected = "fn main(flag: bool) {
     match flag {
-        false => {
-            calculate(
-                second_argument,
-                first_argument
-            )
-        },
         true => {
             calculate(
                 first_argument,
                 second_argument
+            )
+        },
+        false => {
+            calculate(
+                second_argument,
+                first_argument
             )
         },
     }
@@ -562,11 +562,11 @@ fn main() {
         let expected = "fn main() {
     // Keep this function source-aware.
     match true {
-        false => (),
         true => match false {
-            false => false,
             true => true,
+            false => false,
         },
+        false => (),
     }
 }
 ";
@@ -640,12 +640,12 @@ let x: bool = match true {
     false => false,
 };";
         let expected = "let x: bool = match true {
-    false => false,
     true => true,
+    false => false,
 };
 let x: bool = match true {
-    false => false,
     true => true,
+    false => false,
 };";
 
         utils::assert_formatting_with_wrapping_in_all_modes(source, expected);
@@ -654,11 +654,11 @@ let x: bool = match true {
     #[test]
     fn true_false_reordering_and_code_wrapping() {
         let source = "match true {
-    true => true,
-    false => {{false}},}";
+    false => {{false}},
+    true => true,}";
         let expected = "match true {
-    false => false,
     true => true,
+    false => false,
 }";
 
         utils::assert_formatting_with_wrapping_in_all_modes(source, expected);
@@ -667,22 +667,36 @@ let x: bool = match true {
     #[test]
     fn some_reordering_and_code_wrapping() {
         let source = "match witness::PATH {
-    Some(value: bool) => Some(value),
     None => None,
+    Some(value: bool) => Some(value),
 }";
         let expected = "match witness::PATH {
-    None => None,
     Some(value: bool) => Some(value),
+    None => None,
 }";
 
         utils::assert_formatting_with_wrapping_in_all_modes(source, expected);
     }
 
     #[test]
-    fn either_reordering() {
+    fn right_left_match_arms_are_reordered() {
         let source = "match witness::PATH {
     Right(value: bool) => Right(value),
     Left(value: bool) => Left(value),
+}";
+        let expected = "match witness::PATH {
+    Left(value: bool) => Left(value),
+    Right(value: bool) => Right(value),
+}";
+
+        utils::assert_formatting_with_wrapping_in_all_modes(source, expected);
+    }
+
+    #[test]
+    fn left_right_match_arms_keep_canonical_order() {
+        let source = "match witness::PATH {
+    Left(value: bool) => Left(value),
+    Right(value: bool) => Right(value),
 }";
         let expected = "match witness::PATH {
     Left(value: bool) => Left(value),
@@ -706,12 +720,12 @@ let x: bool = match true {
 }";
         let expected = "match witness::PATH {
     Left(value: bool) => match value {
-        false => false,
         true => true,
+        false => false,
     },
     Right(value: bool) => match value {
-        false => false,
         true => true,
+        false => false,
     },
 }";
 
