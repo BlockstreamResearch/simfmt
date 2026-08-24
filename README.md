@@ -98,7 +98,7 @@ In general, it uses `--check` instructs `simfmt` to exit with an error code if t
 
 ### Running `simfmt` from your editor
 
-* [Visual Studio Code](https://marketplace.visualstudio.com/items?itemName=Blockstream.simplicityhl)
+* [Visual Studio Code][2]
 
 ### Configuring `simfmt`
 
@@ -132,3 +132,4 @@ See [MIT license](LICENSE) for details.
 
 
 [1]: https://simplicity-lang.org/
+[2]: [https://simplicity-lang.org/](https://marketplace.visualstudio.com/items?itemName=Blockstream.simplicityhl)

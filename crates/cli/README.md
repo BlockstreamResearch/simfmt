@@ -145,7 +145,7 @@ $ simfmt --emit files contract.simf
 ## Editor integration
 
 [SimplicityHL][1] formatting is available through the
-[Visual Studio Code extension](https://marketplace.visualstudio.com/items?itemName=Blockstream.simplicityhl).
+[Visual Studio Code extension][3].
 
 ## Limitations
 
@@ -171,3 +171,4 @@ See the repository's [contribution guide](../../Contributing.md) and
 
 [1]: https://simplicity-lang.org/
 [2]: [https://simplicity-lang.org/](https://github.com/BlockstreamResearch/simfmt/blob/master/.github/scripts/simfmt-check)
+[3]: https://marketplace.visualstudio.com/items?itemName=Blockstream.simplicityhl

@@ -34,18 +34,6 @@ users:
 * line width;
 * newline style.
 
-## Errors
-
-`pretty_simf_please` returns one of three `PrettySimfError` variants:
-
-* `Operational` means the formatter could not complete an operational step.
-* `FormatError` means the input could not be parsed or formatted safely; its
-  message contains the formatter diagnostics.
-* `StringConversion` means the formatted output unexpectedly contained invalid
-  UTF-8.
-
-The in-memory API has the same [formatter limitations][2] as the `simfmt` CLI.
-
 ## Driver API
 
 The `prettysimf::driver` module exposes the shared configuration types, runtime
