@@ -132,4 +132,4 @@ See [MIT license](LICENSE) for details.
 
 
 [1]: https://simplicity-lang.org/
-[2]: [https://simplicity-lang.org/](https://marketplace.visualstudio.com/items?itemName=Blockstream.simplicityhl)
+[2]: https://marketplace.visualstudio.com/items?itemName=Blockstream.simplicityhl

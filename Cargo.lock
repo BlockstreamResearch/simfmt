@@ -1030,6 +1030,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "prettysimf"
+version = "0.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ff006fb5abee0676279d3eb61cea7ddce0884f23f93567e34d22d555085f9120"
+dependencies = [
+ "annotate-snippets",
+ "either",
+ "pretty",
+ "serde",
+ "similar",
+ "simplicityhl 0.7.1",
+ "term",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
 name = "proc-macro2"
 version = "1.0.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1353,7 +1370,7 @@ dependencies = [
  "anyhow",
  "getopts",
  "paste",
- "prettysimf",
+ "prettysimf 0.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "smplx-std",
  "thiserror",
  "toml",
