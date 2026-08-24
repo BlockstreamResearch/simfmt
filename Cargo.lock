@@ -1023,7 +1023,7 @@ dependencies = [
  "pretty",
  "serde",
  "similar",
- "simplicityhl 0.7.0",
+ "simplicityhl 0.7.1",
  "term",
  "thiserror",
  "toml",
@@ -1417,8 +1417,9 @@ dependencies = [
 
 [[package]]
 name = "simplicityhl"
-version = "0.7.0"
-source = "git+https://github.com/BlockstreamResearch/SimplicityHL.git?branch=master#46867308f28affa386a426f4d4e3e2a8c9db9217"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e9483a06afd760e341a3770dc0be007d61a0978c12353dc215ca9f39edd9efc"
 dependencies = [
  "ariadne",
  "base64 0.21.7",
