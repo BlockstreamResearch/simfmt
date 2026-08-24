@@ -17,8 +17,7 @@ deprecated_in_future = "warn"
 multiple_crate_versions = "allow"
 
 [workspace.dependencies]
-# TODO: change dep on a real one
-simplicityhl = { git = "https://github.com/BlockstreamResearch/SimplicityHL.git", branch = "master", features = ["fmt"] }
+simplicityhl = { version = "0.7.1", features = ["fmt"]}
 
 annotate-snippets = { version = "0.12.16" }
 anyhow = { version = "1.0.103" }
