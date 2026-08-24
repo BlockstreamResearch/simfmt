@@ -1,0 +1,1 @@
+fn main(value /* no identifier/type boundary */: u8) {}

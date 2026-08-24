@@ -1,0 +1,9 @@
+fn main() {
+    let x:u8 = match witness::PATH {
+        Left(branch: Either<u8, u8>) => match branch {
+            Left(value: u8) => value,
+            Right(value: u8) => value,
+        },
+        Right(value: u8) => value,
+    };
+}

@@ -1,0 +1,22 @@
+name: setup
+
+inputs:
+  commit-sha:
+    description: Commit in the repository to use
+    required: false
+    default: master
+  owner-repo:
+    description: GitHub owner and repository to use
+    required: false
+    default: BlockstreamResearch/simfmt
+
+runs:
+  using: composite
+  steps:
+    - name: Install simfmt and simfmt-check
+      shell: bash
+      run: |
+        set -euo pipefail
+        revision="${{ inputs.commit-sha }}"
+        owner_repo="${{ inputs.owner-repo }}"
+        bash "$GITHUB_WORKSPACE/.github/scripts/setup-simfmt" "$revision" "$owner_repo"

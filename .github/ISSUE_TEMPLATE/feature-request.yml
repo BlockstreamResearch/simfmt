@@ -1,0 +1,39 @@
+name: Feature Request
+description: Suggest a new feature for Simfmt
+labels: [ 'feature', 'C-feature-request' ]
+assignees:
+  - ikripaka
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please note that Simfmt's core scope is to pretty-print a parsed program's AST according to the defined style guide. Supporting this function and its associated maintenance takes top priority. Any other features, such as auxiliary formatting configuration options, are secondary to that core mission.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A clear and concise description of what the feature is and what you would like to see in Simfmt.
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: |
+        - Can you say more on why this feature would be desirable to the wider community?
+        - Can you give example snippets to demonstrate the difference between having and not having the proposed feature?
+      placeholder: |
+        Currently, Simfmt outputs:
+        ...
+        
+        With this feature, it would output:
+        ...
+    validations:
+      required: true
+  - type: textarea
+    id: related-config
+    attributes:
+      label: Related configuration options
+      description: Are there existing stable or unstable formatting configuration options related to this feature request?
+    validations:
+      required: false

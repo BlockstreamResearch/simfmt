@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+say() {
+  printf 'setup-simfmt: %s\n' "$1"
+}
+
+err() {
+  say "$1" >&2
+  exit 1
+}
+
+need_cmd() {
+  if ! check_cmd "$1"; then
+    err "need '$1' (command not found)"
+  fi
+}
+
+check_cmd() {
+  command -v "$1" &>/dev/null
+}
+
+usage() {
+  cat >&2 <<EOF
+Usage: $(basename "$0") <revision> <owner/repository>
+
+Clones the requested GitHub revision and installs simfmt and simfmt-check from it.
+EOF
+  exit 2
+}
+
+install_simfmt_from_commit() {
+  need_cmd cargo
+  need_cmd git
+
+  local commit="$1"
+  local repo_url="$2"
+  local install_dir="$3"
+  local bin_dir="$install_dir/bin"
+  local check_bin="$bin_dir/simfmt-check"
+  local source_dir
+  source_dir="$(mktemp -d)" || err 'failed to create temporary directory'
+
+  say "Cloning simfmt from ${repo_url} at ${commit}"
+  git clone --revision="$commit" --depth=1 "$repo_url" "$source_dir"
+
+  say "Installing simfmt from ${source_dir}/crates/cli"
+  cargo install --path "$source_dir/crates/cli" --root "$install_dir" --force
+
+  mkdir -p "$bin_dir"
+  cp "$source_dir/.github/scripts/simfmt-check" "$check_bin"
+  chmod +x "$check_bin"
+  rm -rf "$source_dir"
+}
+
+main() {
+  if [ "$#" -ne 2 ]; then
+    usage
+  fi
+
+  local revision="$1"
+  local owner_repo="$2"
+
+  if [ -z "$revision" ]; then
+    err 'revision must not be empty'
+  fi
+
+  if [[ ! "$owner_repo" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+    err 'owner/repository must be a GitHub repository name'
+  fi
+
+  local base_dir="${XDG_CONFIG_HOME:-$HOME}"
+  local simfmt_dir="${SIMFMT_DIR:-$base_dir/.simfmt}"
+  local bin_dir="$simfmt_dir/bin"
+  local repository_url="https://github.com/${owner_repo}.git"
+
+  install_simfmt_from_commit "$revision" "$repository_url" "$simfmt_dir"
+
+  export PATH="$bin_dir:$PATH"
+  if [ -n "${GITHUB_PATH:-}" ]; then
+    printf '%s\n' "$bin_dir" >> "$GITHUB_PATH"
+  fi
+
+  say 'Verifying simfmt and simfmt-check installations...'
+  need_cmd simfmt
+  need_cmd simfmt-check
+  simfmt --version
+}
+
+main "$@"

@@ -1,0 +1,28 @@
+[package]
+name = "prettysimf"
+version = "0.0.1"
+description = "SimplicityHL prettier library"
+authors = ["ikripaka <illia.kripaka@gmail.com>"]
+categories = ["development-tools", "text-processing", "value-formatting"]
+keywords = ["simplicity", "simplicityhl", "formatter", "pretty-printer"]
+readme = "README.md"
+license = "MIT"
+
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+simplicityhl = { workspace = true }
+
+annotate-snippets = { workspace = true }
+either = { workspace = true }
+pretty = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+similar = { workspace = true }
+term = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }

@@ -1,0 +1,92 @@
+name: Fixtures
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+      - dev
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+
+jobs:
+  fixture-checks:
+    name: Fixture checks (${{ matrix.fixture-directory }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        fixture-directory:
+          - real_contracts
+          - various
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Use Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Resolve simfmt source
+        id: simfmt-source
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            printf 'repository=%s\n' "$PR_HEAD_REPOSITORY" >> "$GITHUB_OUTPUT"
+            printf 'revision=%s\n' "$PR_HEAD_SHA" >> "$GITHUB_OUTPUT"
+          else
+            printf 'repository=%s\n' "$REPOSITORY" >> "$GITHUB_OUTPUT"
+            printf 'revision=%s\n' "$SHA" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install simfmt and simfmt-check
+        uses: ./.github/actions/setup
+        with:
+          commit-sha: ${{ steps.simfmt-source.outputs.revision }}
+          owner-repo: ${{ steps.simfmt-source.outputs.repository }}
+
+      - name: Format source fixtures and compare expected output
+        shell: bash
+        env:
+          FIXTURE_DIRECTORY: ${{ matrix.fixture-directory }}
+        run: |
+          source_directory="crates/cli/tests/source/$FIXTURE_DIRECTORY"
+          target_directory="crates/cli/tests/target/$FIXTURE_DIRECTORY"
+          formatted_directory="$(mktemp -d)"
+          trap 'rm -rf "$formatted_directory"' EXIT
+
+          cp -R "$source_directory/." "$formatted_directory/"
+          simfmt-check -all -d "$formatted_directory"
+          diff --recursive --unified "$target_directory" "$formatted_directory"
+
+      - name: Check target fixture idempotence
+        shell: bash
+        env:
+          FIXTURE_DIRECTORY: ${{ matrix.fixture-directory }}
+        run: simfmt-check -all -d "crates/cli/tests/target/$FIXTURE_DIRECTORY" --check
