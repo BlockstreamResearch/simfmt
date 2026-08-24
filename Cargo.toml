@@ -17,14 +17,14 @@ deprecated_in_future = "warn"
 multiple_crate_versions = "allow"
 
 [workspace.dependencies]
-simplicityhl = { version = "0.7.1", features = ["fmt"]}
+simplicityhl = { version = "0.7.1", features = ["fmt"] }
 
 annotate-snippets = { version = "0.12.16" }
 anyhow = { version = "1.0.103" }
 either = { version = "1.16.0" }
 getopts = { version = "0.2.24" }
 pretty = { version = "0.12.5" }
-prettysimf = { path = "./crates/prettysimf" }
+prettysimf = { version = "0.0.1" }
 serde = { version = "1.0.228" }
 similar = { version = "3.1.1" }
 term = { version = "1.2.1" }
