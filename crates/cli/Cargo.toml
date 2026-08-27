@@ -12,6 +12,12 @@ edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/simfmt-v{ version }-{ target }.tar.gz"
+bin-dir = "{ bin }{ binary-ext }"
+disabled-strategies = ["quick-install"]
+pkg-fmt = "tgz"
+
 [[bin]]
 name = "simfmt"
 path = "src/bin/main.rs"

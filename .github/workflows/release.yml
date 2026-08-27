@@ -1,0 +1,144 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+      - "v*.*.*.rc-*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g. v0.1.2)'
+        required: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }} (${{ matrix.runner }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: full
+      RUST_LOG: debug
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: x86_64-unknown-linux-gnu.tar.gz
+            attestation: x86_64-unknown-linux-gnu.attestation.txt
+
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive: aarch64-apple-darwin.tar.gz
+            attestation: aarch64-apple-darwin.attestation.txt
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Use Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build binaries
+        env:
+          RUST_PROFILE: release
+          TARGET: ${{ matrix.target }}
+          OUT_DIR: target/${{ matrix.target }}
+        run: |
+          cargo build --target $TARGET --profile $RUST_PROFILE --bins
+          mv $OUT_DIR/${{ env.RUST_PROFILE }}/simfmt simfmt
+
+      - name: Binaries attestation
+        id: attestation
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            simfmt
+
+      - name: Record attestation URL
+        env:
+          ATTESTATION: simfmt-${{ github.event.inputs.tag || github.ref_name }}-${{ matrix.attestation }}
+          ATESTATION_URL: ${{ steps.attestation.outputs.attestation-url }}
+        run: printf '%s\n' ${ATESTATION_URL} > ${ATTESTATION}
+
+      - name: Archive binaries
+        env:
+          ARCHIVE: simfmt-${{ github.event.inputs.tag || github.ref_name }}-${{ matrix.archive }}
+        run: tar czf ${ARCHIVE} simfmt
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: simfmt-${{ github.event.inputs.tag || github.ref_name }}-${{ matrix.archive }}
+          path: |
+            simfmt-${{ github.event.inputs.tag || github.ref_name }}-${{ matrix.attestation }}
+            simfmt-${{ github.event.inputs.tag || github.ref_name }}-${{ matrix.archive }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v6
+        with:
+          merge-multiple: true
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: Simfmt ${{ github.event.inputs.tag || github.ref_name }}
+          prerelease: false
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            simfmt-${{ github.event.inputs.tag || github.ref_name }}-*.attestation.txt
+            simfmt-${{ github.event.inputs.tag || github.ref_name }}-*.tar.gz
+
+  publish:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs: [ build, release ]
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: publish-core-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Authenticate
+        uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          ./scripts/publish \
+            ./crates/prettysimf/Cargo.toml \
+            ./crates/cli/Cargo.toml
