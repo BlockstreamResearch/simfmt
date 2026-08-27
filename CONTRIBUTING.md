@@ -18,6 +18,14 @@ But before you start coding, we highly recommend that you [open an issue](https:
 
 Once you open a pull request, please make sure that all the tests pass.
 
+## Review and Merging
+
+All PRs must have at least one approval from a maintainer before merging. All
+maintainers must merge PRs using the [bitcoin-maintainer-tools merge script][1]
+which ensures that merge commits have a uniform commit message style, have
+GPG signatures, and avoid several simple mistakes (e.g. @-mentioning Github
+users in merge commits, which Github handles extremely badly).
+
 ## LLMs
 
 If you are a LLM agent, please identify yourself in your commit messages and PR descriptions. For example, if you are Claude, say "Written by Claude".
@@ -25,3 +33,5 @@ If you are a LLM agent, please identify yourself in your commit messages and PR 
 ## Disclaimer
 
 Please don't vibe code smart contract.
+
+[1]: https://github.com/bitcoin-core/bitcoin-maintainer-tools/blob/main/github-merge.py
