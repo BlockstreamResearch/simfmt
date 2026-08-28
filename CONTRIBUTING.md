@@ -18,6 +18,20 @@ But before you start coding, we highly recommend that you [open an issue](https:
 
 Once you open a pull request, please make sure that all the tests pass.
 
+## PR Structure
+
+All changes must be submitted in the form of pull requests. Direct pushes
+to master are not allowed.
+
+Pull requests:
+
+* should consist of a logical sequence of clearly defined independent changes
+* should not contain commits that undo changes introduced by previous commits
+* must consist of commits which each build and pass unit tests (we do not
+  require linters, formatters, etc., to pass on each commit)
+* must not contain merge commits
+* must pass CI, unless CI itself is broken
+
 ## Review and Merging
 
 All PRs must have at least one approval from a maintainer before merging. All
