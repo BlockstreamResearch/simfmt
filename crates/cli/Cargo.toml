@@ -1,6 +1,6 @@
 [package]
 name = "simfmt"
-version = "0.0.1"
+version = "0.0.2"
 description = "Formatting tool for SimplicityHL"
 authors = ["ikripaka <illia.kripaka@gmail.com>"]
 categories = ["development-tools", "command-line-utilities", "text-processing"]
