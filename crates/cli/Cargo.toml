@@ -1,6 +1,6 @@
 [package]
 name = "simfmt"
-version = "0.0.1"
+version = "0.0.2"
 description = "Formatting tool for SimplicityHL"
 authors = ["ikripaka <illia.kripaka@gmail.com>"]
 categories = ["development-tools", "command-line-utilities", "text-processing"]
@@ -11,6 +11,12 @@ license = "MIT"
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/simfmt-v{ version }-{ target }.tar.gz"
+bin-dir = "{ bin }{ binary-ext }"
+disabled-strategies = ["quick-install"]
+pkg-fmt = "tgz"
 
 [[bin]]
 name = "simfmt"
