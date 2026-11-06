@@ -85,7 +85,7 @@ impl fmt::Display for FormatReportFormatter<'_> {
 
         if !errors_by_file.is_empty() {
             let label = format!(
-                "simplefmt has failed to format. See previous {} errors.",
+                "simfmt has failed to format. See previous {} errors.",
                 self.report.warning_count()
             );
 
