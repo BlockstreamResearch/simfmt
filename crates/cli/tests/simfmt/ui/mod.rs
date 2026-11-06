@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::Path;
 
+use simplex::simplicityhl::TemplateAst;
+
 use crate::simfmt;
 
 fn assert_fixture(input_file: &str, target_file: &str) {
@@ -54,12 +56,11 @@ fn assert_eq_cmr(
 }
 
 fn get_cmr(source_name: &str, source: &str, arguments: simplex::simplicityhl::Arguments) -> String {
+    use simplex::simplicityhl::UnstableFeatures;
     use simplex::simplicityhl::ast::ElementsJetHinter;
-    use simplex::simplicityhl::{TemplateProgram, UnstableFeatures};
 
-    let template =
-        TemplateProgram::new_with_unstable(source, &UnstableFeatures::all(), Box::new(ElementsJetHinter::new()))
-            .unwrap_or_else(|error| panic!("failed to compile template `{source_name}`: {error}"));
+    let template = TemplateAst::new_with_unstable(source, &UnstableFeatures::all(), Box::new(ElementsJetHinter::new()))
+        .unwrap_or_else(|error| panic!("failed to compile template `{source_name}`: {error}"));
     let compiled = template
         .instantiate(arguments, false)
         .unwrap_or_else(|error| panic!("failed to instantiate `{source_name}`: {error}"));
@@ -110,32 +111,95 @@ macro_rules! ui_tests {
 
 // We wrap arguments type in literal to reduce errors in IDEs
 macro_rules! cmr_ui_tests {
-    ($($name:ident: $input:tt => $expected:tt, $module:ident, $arguments:literal,)+) => {
+    ($($name:ident: $input:tt => $expected:tt, $args_module:ident, $arguments:literal, $program:literal, $source:literal),+ $(,)?) => {
         $(
             #[test]
             fn $name() {
-                use simplex::program::ArgumentsTrait;
-
                 #[allow(clippy::unused_unit)]
                 mod input {
                     simplex::include_simf!($input);
                     paste::paste! {
-                        pub(super) type TestArguments = $module::[<$arguments>];
+                        use simplex::program::{Program};
+                        use simplex::simplicityhl::Arguments;
+
+                        #[allow(dead_code)]
+                        struct [<$program>] {
+                            program: Program
+                        }
+
+                        impl [<$program>] {
+                            #[allow(dead_code)]
+                            const SOURCE: &'static str = $args_module::[<$source>];
+
+                            #[allow(dead_code)]
+                            fn new(arguments: impl Into<Arguments>) -> Self {
+                                Self {
+                                    program: Program::new(Self::SOURCE, arguments.into()),
+                                }
+                            }
+                        }
+
+                        impl AsRef<Program> for [<$program>] {
+                            fn as_ref(&self) -> &Program {
+                                &self.program
+                            }
+                        }
+
+                        impl AsMut<Program> for [<$program>] {
+                            fn as_mut(&mut self) -> &mut Program {
+                                &mut self.program
+                            }
+                        }
+
+                        pub(super) type TestArguments = $args_module::[<$arguments>];
                     }
                 }
+
                 #[allow(clippy::unused_unit)]
                 mod target {
                     simplex::include_simf!($expected);
                     paste::paste! {
-                        pub(super) type TestArguments = $module::[<$arguments>];
+                        use simplex::program::{Program};
+                        use simplex::simplicityhl::Arguments;
+
+                        #[allow(dead_code)]
+                        struct [<$program>] {
+                            program: Program
+                        }
+
+                        impl [<$program>] {
+                            #[allow(dead_code)]
+                            const SOURCE: &'static str = $args_module::[<$source>];
+
+                            #[allow(dead_code)]
+                            fn new(arguments: impl Into<Arguments>) -> Self {
+                                Self {
+                                    program: Program::new(Self::SOURCE, arguments.into()),
+                                }
+                            }
+                        }
+
+                        impl AsRef<Program> for [<$program>] {
+                            fn as_ref(&self) -> &Program {
+                                &self.program
+                            }
+                        }
+
+                        impl AsMut<Program> for [<$program>] {
+                            fn as_mut(&mut self) -> &mut Program {
+                                &mut self.program
+                            }
+                        }
+
+                        pub(super) type TestArguments = $args_module::[<$arguments>];
                     }
                 }
 
                 assert_eq_cmr(
                     $input,
-                    input::TestArguments::default().build_arguments(),
+                    input::TestArguments::default().into(),
                     $expected,
-                    target::TestArguments::default().build_arguments(),
+                    target::TestArguments::default().into(),
                 );
             }
         )+
@@ -154,19 +218,19 @@ macro_rules! failing_ui_tests {
 }
 
 cmr_ui_tests! {
-    cmr_array_tr_storage: "tests/source/real_contracts/array_tr_storage.simf" => "tests/target/real_contracts/array_tr_storage.simf", derived_array_tr_storage, "ArrayTrStorageArguments",
-    cmr_bytes32_tr_storage: "tests/source/real_contracts/bytes32_tr_storage.simf" => "tests/target/real_contracts/bytes32_tr_storage.simf", derived_bytes32_tr_storage, "Bytes32TrStorageArguments",
-    cmr_dual_currency_deposit: "tests/source/real_contracts/dual_currency_deposit.simf" => "tests/target/real_contracts/dual_currency_deposit.simf", derived_dual_currency_deposit, "DualCurrencyDepositArguments",
-    cmr_either_with_single_witness: "tests/source/real_contracts/either_with_single_witness.simf" => "tests/target/real_contracts/either_with_single_witness.simf", derived_either_with_single_witness, "EitherWithSingleWitnessArguments",
-    cmr_exotic_values: "tests/source/real_contracts/exotic_values.simf" => "tests/target/real_contracts/exotic_values.simf", derived_exotic_values, "ExoticValuesArguments",
-    cmr_option_offer: "tests/source/real_contracts/option_offer.simf" => "tests/target/real_contracts/option_offer.simf", derived_option_offer, "OptionOfferArguments",
-    cmr_options: "tests/source/real_contracts/options.simf" => "tests/target/real_contracts/options.simf", derived_options, "OptionsArguments",
-    cmr_simple_storage: "tests/source/real_contracts/simple_storage.simf" => "tests/target/real_contracts/simple_storage.simf", derived_simple_storage, "SimpleStorageArguments",
-    cmr_single_bit: "tests/source/real_contracts/single_bit.simf" => "tests/target/real_contracts/single_bit.simf", derived_single_bit, "SingleBitArguments",
-    cmr_maker_order: "tests/source/real_contracts/maker_order.simf" => "tests/target/real_contracts/maker_order.simf", derived_maker_order, "MakerOrderArguments",
-    cmr_prediction_market: "tests/source/real_contracts/prediction_market.simf" => "tests/target/real_contracts/prediction_market.simf", derived_prediction_market, "PredictionMarketArguments",
-    cmr_match_arm_blocks: "tests/source/various/match_arm_blocks.simf" => "tests/target/various/match_arm_blocks.simf", derived_match_arm_blocks, "MatchArmBlocksArguments",
-    cmr_omit_comas_in_tuples: "tests/source/various/omit_comas_in_tuples.simf" => "tests/target/various/omit_comas_in_tuples.simf", derived_omit_comas_in_tuples, "OmitComasInTuplesArguments",
+    cmr_array_tr_storage: "tests/source/real_contracts/array_tr_storage.simf" => "tests/target/real_contracts/array_tr_storage.simf", derived_array_tr_storage, "ArrayTrStorageArguments", "ArrayTrStorageProgram", "ARRAY_TR_STORAGE_CONTRACT_SOURCE",
+    cmr_bytes32_tr_storage: "tests/source/real_contracts/bytes32_tr_storage.simf" => "tests/target/real_contracts/bytes32_tr_storage.simf", derived_bytes32_tr_storage, "Bytes32TrStorageArguments", "Bytes32TrStorageProgram", "BYTES32_TR_STORAGE_CONTRACT_SOURCE",
+    cmr_dual_currency_deposit: "tests/source/real_contracts/dual_currency_deposit.simf" => "tests/target/real_contracts/dual_currency_deposit.simf", derived_dual_currency_deposit, "DualCurrencyDepositArguments", "DualCurrencyDepositProgram", "DUAL_CURRENCY_DEPOSIT_CONTRACT_SOURCE",
+    cmr_either_with_single_witness: "tests/source/real_contracts/either_with_single_witness.simf" => "tests/target/real_contracts/either_with_single_witness.simf", derived_either_with_single_witness, "EitherWithSingleWitnessArguments", "EitherWithSingleWitnessProgram", "EITHER_WITH_SINGLE_WITNESS_CONTRACT_SOURCE",
+    cmr_exotic_values: "tests/source/real_contracts/exotic_values.simf" => "tests/target/real_contracts/exotic_values.simf", derived_exotic_values, "ExoticValuesArguments", "ExoticValuesProgram", "EXOTIC_VALUES_CONTRACT_SOURCE",
+    cmr_option_offer: "tests/source/real_contracts/option_offer.simf" => "tests/target/real_contracts/option_offer.simf", derived_option_offer, "OptionOfferArguments", "OptionOfferProgram", "OPTION_OFFER_CONTRACT_SOURCE",
+    cmr_options: "tests/source/real_contracts/options.simf" => "tests/target/real_contracts/options.simf", derived_options, "OptionsArguments", "OptionsProgram", "OPTIONS_CONTRACT_SOURCE",
+    cmr_simple_storage: "tests/source/real_contracts/simple_storage.simf" => "tests/target/real_contracts/simple_storage.simf", derived_simple_storage, "SimpleStorageArguments", "SimpleStorageProgram", "SIMPLE_STORAGE_CONTRACT_SOURCE",
+    cmr_single_bit: "tests/source/real_contracts/single_bit.simf" => "tests/target/real_contracts/single_bit.simf", derived_single_bit, "SingleBitArguments", "SingleBitProgram", "SINGLE_BIT_CONTRACT_SOURCE",
+    cmr_maker_order: "tests/source/real_contracts/maker_order.simf" => "tests/target/real_contracts/maker_order.simf", derived_maker_order, "MakerOrderArguments", "MakerOrderProgram", "MAKER_ORDER_CONTRACT_SOURCE",
+    cmr_prediction_market: "tests/source/real_contracts/prediction_market.simf" => "tests/target/real_contracts/prediction_market.simf", derived_prediction_market, "PredictionMarketArguments", "PredictionMarketProgram", "PREDICTION_MARKET_CONTRACT_SOURCE",
+    cmr_match_arm_blocks: "tests/source/various/match_arm_blocks.simf" => "tests/target/various/match_arm_blocks.simf", derived_match_arm_blocks, "MatchArmBlocksArguments", "MatchArmBlocksProgram", "MATCH_ARM_BLOCKS_CONTRACT_SOURCE",
+    cmr_omit_comas_in_tuples: "tests/source/various/omit_comas_in_tuples.simf" => "tests/target/various/omit_comas_in_tuples.simf", derived_omit_comas_in_tuples, "OmitComasInTuplesArguments", "OmitComasInTuplesProgram", "OMIT_COMAS_IN_TUPLES_CONTRACT_SOURCE",
 }
 
 // We can't generate arguments for this contracts:
