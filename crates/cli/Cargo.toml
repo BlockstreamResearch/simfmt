@@ -36,5 +36,5 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
-paste = "1.0.15"
-smplx-std = { version = "0.2.0" }
+paste = { version = "1.0.15" }
+smplx-std = { version = "0.3.0" }
