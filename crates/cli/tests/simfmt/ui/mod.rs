@@ -256,6 +256,7 @@ ui_tests! {
     maker_order: "source/real_contracts/maker_order.simf" => "target/real_contracts/maker_order.simf",
     prediction_market: "source/real_contracts/prediction_market.simf" => "target/real_contracts/prediction_market.simf",
     starkware_symphony: "source/real_contracts/starkware_symphony.simf" => "target/real_contracts/starkware_symphony.simf",
+    voucher: "source/real_contracts/voucher.simf" => "target/real_contracts/voucher.simf",
     match_arm_blocks: "source/various/match_arm_blocks.simf" => "target/various/match_arm_blocks.simf",
     omit_comas_in_tuples: "source/various/omit_comas_in_tuples.simf" => "target/various/omit_comas_in_tuples.simf",
     comment_trivia: "source/various/comment_trivia.simf" => "target/various/comment_trivia.simf",
