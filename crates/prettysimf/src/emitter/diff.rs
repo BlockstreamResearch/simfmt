@@ -1,8 +1,5 @@
 use super::{Emitter, EmitterConfig, EmitterResult, FormattedFile, Write, io};
 
-#[cfg(test)]
-use super::FileName;
-
 use crate::utils::{OutputWriter, Verbosity};
 
 use similar::{ChangeTag, DiffTag, TextDiff};
@@ -100,7 +97,9 @@ fn make_diff<'a>(original: &'a str, formatted: &'a str) -> TextDiff<'a, 'a, str>
 
 #[cfg(test)]
 mod tests {
+    use super::super::FileName;
     use super::*;
+
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -202,7 +201,7 @@ mod tests {
             )
             .unwrap();
         assert!(result.has_diff);
-        assert!(writer.is_empty());
+        assert_eq!(writer, [] as [u8; 0]);
     }
 
     #[test]

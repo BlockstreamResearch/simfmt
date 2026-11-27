@@ -143,7 +143,7 @@ mod tests {
         let mut formatted = String::new();
         ensure_single_trailing_newline(NewlineStyle::Unix, &mut formatted, "");
 
-        assert!(formatted.is_empty());
+        assert_eq!(formatted, "");
     }
 
     #[test]
